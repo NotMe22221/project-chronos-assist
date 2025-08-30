@@ -76,7 +76,14 @@ export const useElevenLabsConversation = () => {
     },
     onError: (error) => {
       console.error('ElevenLabs conversation error:', error);
-      const errorMessage = typeof error === 'string' ? error : error?.message || 'Failed to maintain conversation';
+      let errorMessage = 'Failed to maintain conversation';
+      
+      if (typeof error === 'string') {
+        errorMessage = error;
+      } else if (error && typeof error === 'object' && 'message' in error) {
+        errorMessage = String(error.message);
+      }
+      
       toast({
         title: "Conversation Error",
         description: errorMessage,
