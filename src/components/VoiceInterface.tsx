@@ -1,4 +1,4 @@
-import { Mic, MicOff, Volume2, VolumeX, Square } from 'lucide-react';
+import { Mic, Square, Volume2, VolumeX } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { JarvisPanel } from './JarvisPanel';
 import { useJarvisAI } from '@/hooks/useJarvisAI';
