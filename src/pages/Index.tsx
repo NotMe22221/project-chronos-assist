@@ -31,6 +31,26 @@ const Index = () => {
     }
   }, [addGestureSupport, setCallbacks]);
 
+  // Add the keyframes animation to document head
+  useEffect(() => {
+    const style = document.createElement('style');
+    style.textContent = `
+      @keyframes grid-glow {
+        0% {
+          filter: brightness(1) contrast(1);
+        }
+        100% {
+          filter: brightness(1.2) contrast(1.1);
+        }
+      }
+    `;
+    document.head.appendChild(style);
+    
+    return () => {
+      document.head.removeChild(style);
+    };
+  }, []);
+
   return (
     <div 
       ref={mainRef}
@@ -102,7 +122,7 @@ const Index = () => {
                 <h3 className="text-primary font-semibold text-glow mb-4">Voice Commands</h3>
                 <div className="space-y-3">
                   {[
-                    'What\'s the weather like?',
+                    "What's the weather like?",
                     'Analyze my daily schedule',
                     'Generate a status report',
                     'What time is it?',
@@ -178,17 +198,6 @@ const Index = () => {
           </p>
         </footer>
       </div>
-
-      <style jsx>{`
-        @keyframes grid-glow {
-          0% {
-            filter: brightness(1) contrast(1);
-          }
-          100% {
-            filter: brightness(1.2) contrast(1.1);
-          }
-        }
-      `}</style>
     </div>
   );
 };
