@@ -42,23 +42,44 @@ export const useElevenLabsConversation = () => {
     onMessage: (message) => {
       console.log('Message received:', message);
       
-      // Add message to conversation history
-      if (message.type === 'agent_response' || message.type === 'user_transcript') {
-        const newMessage: ConversationMessage = {
-          id: Date.now().toString(),
-          text: message.message || '',
-          timestamp: new Date(),
-          type: message.type === 'user_transcript' ? 'user' : 'ai'
-        };
+      // Handle different message types based on the actual ElevenLabs API structure
+      if (message && typeof message === 'object') {
+        let messageText = '';
+        let messageType: 'user' | 'ai' = 'ai';
         
-        setMessages(prev => [...prev, newMessage]);
+        // Handle the message based on its structure
+        if ('message' in message && typeof message.message === 'string') {
+          messageText = message.message;
+        } else if ('text' in message && typeof message.text === 'string') {
+          messageText = message.text;
+        } else if (typeof message === 'string') {
+          messageText = message;
+        }
+        
+        // Determine message type based on source
+        if ('source' in message) {
+          messageType = message.source === 'user' ? 'user' : 'ai';
+        }
+        
+        // Only add non-empty messages
+        if (messageText.trim()) {
+          const newMessage: ConversationMessage = {
+            id: Date.now().toString(),
+            text: messageText,
+            timestamp: new Date(),
+            type: messageType
+          };
+          
+          setMessages(prev => [...prev, newMessage]);
+        }
       }
     },
     onError: (error) => {
       console.error('ElevenLabs conversation error:', error);
+      const errorMessage = typeof error === 'string' ? error : error?.message || 'Failed to maintain conversation';
       toast({
         title: "Conversation Error",
-        description: error.message || 'Failed to maintain conversation',
+        description: errorMessage,
         variant: "destructive"
       });
     }
@@ -69,9 +90,9 @@ export const useElevenLabsConversation = () => {
       // Request microphone permission first
       await navigator.mediaDevices.getUserMedia({ audio: true });
       
-      // Start conversation with the specific agent ID
+      // Start conversation with the agent ID using the correct API format
       const id = await conversation.startSession({
-        agentId: 'agent_0401k3w8fx86e22sdaw6j6va5dd7'
+        signedUrl: `https://api.elevenlabs.io/v1/convai/conversation?agent_id=agent_0401k3w8fx86e22sdaw6j6va5dd7`
       });
       
       setConversationId(id);
