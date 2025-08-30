@@ -1,12 +1,40 @@
 import { VoiceInterface } from '@/components/VoiceInterface';
 import { CommandCenter } from '@/components/CommandCenter';
 import { DataVisualization } from '@/components/DataVisualization';
+import { useEyeTracking } from '@/hooks/useEyeTracking';
+import { useTouchNavigation } from '@/hooks/useTouchNavigation';
+import { useEffect, useRef } from 'react';
 import jarvisBg from '@/assets/jarvis-bg.jpg';
 
 const Index = () => {
+  const { gazePosition } = useEyeTracking();
+  const { addGestureSupport, setCallbacks } = useTouchNavigation();
+  const mainRef = useRef<HTMLDivElement>(null);
+
+  // Initialize touch gestures for the main container
+  useEffect(() => {
+    if (mainRef.current) {
+      const cleanup = addGestureSupport(mainRef.current);
+      
+      // Set up swipe callbacks for navigation
+      setCallbacks({
+        onSwipe: (gesture) => {
+          console.log('Swipe detected:', gesture);
+          // You can add scroll or navigation logic here
+          if (gesture.direction === 'up' || gesture.direction === 'down') {
+            const scrollAmount = gesture.direction === 'up' ? -200 : 200;
+            window.scrollBy({ top: scrollAmount, behavior: 'smooth' });
+          }
+        }
+      });
+
+      return cleanup;
+    }
+  }, [addGestureSupport, setCallbacks]);
   return (
     <div 
-      className="min-h-screen bg-background relative overflow-hidden"
+      ref={mainRef}
+      className="min-h-screen bg-background relative overflow-hidden touch-target"
       style={{
         backgroundImage: `url(${jarvisBg})`,
         backgroundSize: 'cover',
@@ -21,7 +49,7 @@ const Index = () => {
       <div className="relative z-10 p-4 md:p-6 lg:p-8">
         {/* Header */}
         <header className="text-center mb-8">
-          <h1 className="text-4xl md:text-6xl font-bold text-glow mb-4">
+          <h1 className="text-4xl md:text-6xl font-bold text-glow mb-4 touch-target">
             <span className="bg-gradient-primary bg-clip-text text-transparent">
               JARVIS
             </span>
@@ -31,8 +59,15 @@ const Index = () => {
           </p>
           <div className="flex items-center justify-center mt-4 space-x-2">
             <div className="w-2 h-2 bg-success rounded-full animate-pulse"></div>
-            <span className="text-xs text-success font-mono">SYSTEM ONLINE</span>
+            <span className="text-xs text-success font-mono">SYSTEM ONLINE - AI READY</span>
           </div>
+          
+          {/* Gaze position indicator (only visible when eye tracking is active) */}
+          {gazePosition.x > 0 && (
+            <div className="mt-2 text-xs text-primary/60">
+              Gaze: {Math.round(gazePosition.x)}, {Math.round(gazePosition.y)}
+            </div>
+          )}
         </header>
 
         {/* Dashboard Grid */}
@@ -58,25 +93,25 @@ const Index = () => {
             </div>
             
             {/* Quick Commands Panel */}
-            <div className="jarvis-panel jarvis-glow">
+            <div className="jarvis-panel jarvis-glow touch-target">
               <div className="p-6">
-                <h3 className="text-primary font-semibold text-glow mb-4">Quick Commands</h3>
+                <h3 className="text-primary font-semibold text-glow mb-4">Voice Commands</h3>
                 <div className="space-y-3">
                   {[
-                    'Check system status',
-                    'Analyze data patterns',
-                    'Generate report',
-                    'Monitor network activity',
-                    'Run diagnostics'
+                    'What\'s the weather like?',
+                    'Analyze my daily schedule',
+                    'Generate a status report',
+                    'What time is it?',
+                    'Tell me a joke'
                   ].map((command, index) => (
                     <div 
                       key={index}
-                      className="p-3 bg-gradient-panel rounded border border-primary/20 hover:border-primary/40 transition-colors cursor-pointer group"
+                      className="p-3 bg-gradient-panel rounded border border-primary/20 hover:border-primary/40 transition-colors cursor-pointer group touch-target gaze-hover"
                     >
                       <div className="flex items-center space-x-3">
                         <div className="w-2 h-2 bg-secondary rounded-full group-hover:animate-pulse"></div>
                         <span className="text-sm text-foreground group-hover:text-primary transition-colors">
-                          {command}
+                          "{command}"
                         </span>
                       </div>
                     </div>
@@ -86,36 +121,43 @@ const Index = () => {
             </div>
 
             {/* System Status Panel */}
-            <div className="jarvis-panel">
+            <div className="jarvis-panel touch-target">
               <div className="p-6">
                 <h3 className="text-primary font-semibold text-glow mb-4">System Status</h3>
                 <div className="space-y-3">
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-muted-foreground">Voice Recognition</span>
                     <div className="flex items-center space-x-2">
-                      <div className="w-2 h-2 bg-success rounded-full"></div>
+                      <div className="w-2 h-2 bg-success rounded-full animate-pulse"></div>
                       <span className="text-xs text-success">READY</span>
                     </div>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-muted-foreground">AI Processing</span>
                     <div className="flex items-center space-x-2">
-                      <div className="w-2 h-2 bg-success rounded-full"></div>
+                      <div className="w-2 h-2 bg-success rounded-full animate-pulse"></div>
                       <span className="text-xs text-success">ACTIVE</span>
                     </div>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-muted-foreground">Eye Tracking</span>
                     <div className="flex items-center space-x-2">
-                      <div className="w-2 h-2 bg-warning rounded-full"></div>
-                      <span className="text-xs text-warning">PENDING</span>
+                      <div className="w-2 h-2 bg-success rounded-full animate-pulse"></div>
+                      <span className="text-xs text-success">AVAILABLE</span>
                     </div>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-muted-foreground">Speech Synthesis</span>
                     <div className="flex items-center space-x-2">
-                      <div className="w-2 h-2 bg-warning rounded-full"></div>
-                      <span className="text-xs text-warning">PENDING</span>
+                      <div className="w-2 h-2 bg-success rounded-full animate-pulse"></div>
+                      <span className="text-xs text-success">READY</span>
+                    </div>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-muted-foreground">Touch Navigation</span>
+                    <div className="flex items-center space-x-2">
+                      <div className="w-2 h-2 bg-success rounded-full animate-pulse"></div>
+                      <span className="text-xs text-success">ENABLED</span>
                     </div>
                   </div>
                 </div>
@@ -126,7 +168,10 @@ const Index = () => {
 
         {/* Footer */}
         <footer className="text-center mt-12 text-xs text-muted-foreground">
-          <p>JARVIS AI Assistant - Version 1.0.0 | Ready for voice commands and API integration</p>
+          <p>JARVIS AI Assistant - Version 2.0.0 | Full Speech-to-Speech AI • Eye Tracking • Touch Navigation</p>
+          <p className="mt-2 text-primary/60">
+            🎤 Voice Commands • 👁️ Eye Tracking (Desktop) • 👆 Touch Navigation (Mobile) • 🧠 OpenAI GPT-4
+          </p>
         </footer>
       </div>
     </div>

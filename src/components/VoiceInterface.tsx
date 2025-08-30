@@ -1,21 +1,29 @@
-import { useState } from 'react';
-import { Mic, MicOff, Volume2, VolumeX } from 'lucide-react';
+import { Mic, MicOff, Volume2, VolumeX, Square } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { JarvisPanel } from './JarvisPanel';
+import { useJarvisAI } from '@/hooks/useJarvisAI';
+import { cn } from '@/lib/utils';
 
 export const VoiceInterface = () => {
-  const [isListening, setIsListening] = useState(false);
-  const [isSpeaking, setIsSpeaking] = useState(false);
-  const [transcript, setTranscript] = useState('');
+  const {
+    isListening,
+    isSpeaking,
+    transcript,
+    startListening,
+    stopListening,
+    stopSpeaking
+  } = useJarvisAI();
 
-  const toggleListening = () => {
-    setIsListening(!isListening);
-    // Future: Initialize speech recognition
+  const handleMicClick = async () => {
+    if (isListening) {
+      await stopListening();
+    } else {
+      await startListening();
+    }
   };
 
-  const toggleSpeaking = () => {
-    setIsSpeaking(!isSpeaking);
-    // Future: Initialize text-to-speech
+  const handleSpeakerClick = () => {
+    stopSpeaking();
   };
 
   return (
@@ -23,33 +31,33 @@ export const VoiceInterface = () => {
       <div className="space-y-4">
         <div className="flex justify-center space-x-4">
           <Button
-            onClick={toggleListening}
+            onClick={handleMicClick}
             variant={isListening ? "default" : "outline"}
             size="lg"
             className={cn(
-              "h-16 w-16 rounded-full",
-              isListening && "animate-pulse-glow bg-gradient-primary"
+              "h-16 w-16 rounded-full transition-all duration-300",
+              isListening && "animate-pulse-glow bg-gradient-primary shadow-glow"
             )}
           >
             {isListening ? (
-              <Mic className="h-6 w-6" />
+              <Square className="h-6 w-6" />
             ) : (
-              <MicOff className="h-6 w-6" />
+              <Mic className="h-6 w-6" />
             )}
           </Button>
           <Button
-            onClick={toggleSpeaking}
+            onClick={handleSpeakerClick}
             variant={isSpeaking ? "default" : "outline"}
             size="lg"
             className={cn(
-              "h-16 w-16 rounded-full",
-              isSpeaking && "animate-pulse-glow bg-gradient-secondary"
+              "h-16 w-16 rounded-full transition-all duration-300",
+              isSpeaking && "animate-pulse-glow bg-gradient-secondary shadow-glow"
             )}
           >
             {isSpeaking ? (
-              <Volume2 className="h-6 w-6" />
-            ) : (
               <VolumeX className="h-6 w-6" />
+            ) : (
+              <Volume2 className="h-6 w-6" />
             )}
           </Button>
         </div>
@@ -76,6 +84,3 @@ export const VoiceInterface = () => {
     </JarvisPanel>
   );
 };
-
-// Import cn from utils
-import { cn } from '@/lib/utils';
