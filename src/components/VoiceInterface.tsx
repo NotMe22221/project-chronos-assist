@@ -1,71 +1,99 @@
-import { Mic, Square, Volume2, VolumeX } from 'lucide-react';
+
+import { Mic, Square, Volume2, VolumeX, Phone, PhoneOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { JarvisPanel } from './JarvisPanel';
-import { useJarvisAI } from '@/hooks/useJarvisAI';
+import { useElevenLabsConversation } from '@/hooks/useElevenLabsConversation';
 import { cn } from '@/lib/utils';
+import { Slider } from '@/components/ui/slider';
+import { useState } from 'react';
 
 export const VoiceInterface = () => {
   const {
-    isListening,
+    isConnected,
     isSpeaking,
-    transcript,
-    startListening,
-    stopListening,
-    stopSpeaking
-  } = useJarvisAI();
+    status,
+    startConversation,
+    endConversation,
+    setVolume
+  } = useElevenLabsConversation();
+  
+  const [volumeLevel, setVolumeLevel] = useState([0.8]);
 
-  const handleMicClick = async () => {
-    if (isListening) {
-      await stopListening();
+  const handleConnectionToggle = async () => {
+    if (isConnected) {
+      await endConversation();
     } else {
-      await startListening();
+      await startConversation();
     }
   };
 
-  const handleSpeakerClick = () => {
-    stopSpeaking();
+  const handleVolumeChange = async (value: number[]) => {
+    setVolumeLevel(value);
+    await setVolume(value[0]);
   };
 
   return (
-    <JarvisPanel title="Voice Interface" glow={isListening || isSpeaking} pulse={isListening}>
+    <JarvisPanel title="Voice Interface" glow={isConnected || isSpeaking} pulse={isSpeaking}>
       <div className="space-y-4">
         <div className="flex justify-center space-x-4">
           <Button
-            onClick={handleMicClick}
-            variant={isListening ? "default" : "outline"}
+            onClick={handleConnectionToggle}
+            variant={isConnected ? "default" : "outline"}
             size="lg"
             className={cn(
               "h-16 w-16 rounded-full transition-all duration-300",
-              isListening && "animate-pulse-glow bg-gradient-primary shadow-glow"
+              isConnected && "animate-pulse-glow bg-gradient-primary shadow-glow"
             )}
           >
-            {isListening ? (
-              <Square className="h-6 w-6" />
+            {isConnected ? (
+              <PhoneOff className="h-6 w-6" />
             ) : (
-              <Mic className="h-6 w-6" />
+              <Phone className="h-6 w-6" />
             )}
           </Button>
+          
           <Button
-            onClick={handleSpeakerClick}
             variant={isSpeaking ? "default" : "outline"}
             size="lg"
+            disabled={!isConnected}
             className={cn(
               "h-16 w-16 rounded-full transition-all duration-300",
               isSpeaking && "animate-pulse-glow bg-gradient-secondary shadow-glow"
             )}
           >
             {isSpeaking ? (
-              <VolumeX className="h-6 w-6" />
-            ) : (
               <Volume2 className="h-6 w-6" />
+            ) : (
+              <VolumeX className="h-6 w-6" />
             )}
           </Button>
         </div>
         
+        {/* Volume Control */}
+        {isConnected && (
+          <div className="space-y-2">
+            <label className="text-sm text-muted-foreground">Volume</label>
+            <Slider
+              value={volumeLevel}
+              onValueChange={handleVolumeChange}
+              max={1}
+              min={0}
+              step={0.1}
+              className="w-full"
+            />
+          </div>
+        )}
+        
         <div className="min-h-[80px] p-4 bg-muted/30 rounded-lg border border-primary/20">
-          <p className="text-sm text-muted-foreground mb-2">Transcript:</p>
+          <p className="text-sm text-muted-foreground mb-2">Status:</p>
           <p className="text-foreground">
-            {transcript || (isListening ? "Listening..." : "Click the microphone to start")}
+            {isConnected 
+              ? `Connected - ${isSpeaking ? 'JARVIS is speaking...' : 'Ready for voice commands'}` 
+              : 'Click to connect and start talking to JARVIS'
+            }
+          </p>
+          <p className="text-xs text-muted-foreground mt-2">
+            Connection Status: {status}
           </p>
         </div>
 
@@ -73,10 +101,10 @@ export const VoiceInterface = () => {
           <div className="flex items-center justify-center space-x-2">
             <div className={cn(
               "w-2 h-2 rounded-full",
-              isListening ? "bg-primary animate-pulse" : "bg-muted"
+              isConnected ? "bg-primary animate-pulse" : "bg-muted"
             )}></div>
             <span className="text-xs text-muted-foreground">
-              {isListening ? "ACTIVE" : "STANDBY"}
+              {isConnected ? "CONNECTED" : "DISCONNECTED"}
             </span>
           </div>
         </div>

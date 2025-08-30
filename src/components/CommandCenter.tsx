@@ -1,18 +1,18 @@
+
 import { useState, useEffect, useRef } from 'react';
 import { JarvisPanel } from './JarvisPanel';
 import { Terminal, Brain, Zap, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { useJarvisAI } from '@/hooks/useJarvisAI';
+import { useElevenLabsConversation } from '@/hooks/useElevenLabsConversation';
 import { useEyeTracking } from '@/hooks/useEyeTracking';
 import { useTouchNavigation } from '@/hooks/useTouchNavigation';
 import { cn } from '@/lib/utils';
 
 export const CommandCenter = () => {
-  const { messages, isProcessing, sendTextMessage } = useJarvisAI();
+  const { messages, isConnected, isSpeaking } = useElevenLabsConversation();
   const { isActive: eyeTrackingActive, startEyeTracking, calibrateEyeTracking } = useEyeTracking();
   const { addGestureSupport } = useTouchNavigation();
-  const [inputValue, setInputValue] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -29,25 +29,11 @@ export const CommandCenter = () => {
     }
   }, [addGestureSupport]);
 
-  const handleSendMessage = async () => {
-    if (!inputValue.trim() || isProcessing) return;
-    
-    await sendTextMessage(inputValue);
-    setInputValue('');
-  };
-
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSendMessage();
-    }
-  };
-
   return (
     <JarvisPanel 
       title="AI Command Center" 
-      glow={isProcessing} 
-      pulse={isProcessing}
+      glow={isConnected || isSpeaking} 
+      pulse={isSpeaking}
       className="h-full"
     >
       <div className="space-y-4">
@@ -55,11 +41,16 @@ export const CommandCenter = () => {
         <div className="flex items-center justify-between p-3 bg-gradient-panel rounded-lg border border-primary/10">
           <div className="flex items-center space-x-3">
             <Brain className="h-5 w-5 text-primary" />
-            <span className="text-sm font-medium">AI Status</span>
+            <span className="text-sm font-medium">ElevenLabs JARVIS</span>
           </div>
           <div className="flex items-center space-x-2">
-            <div className="w-2 h-2 bg-success rounded-full animate-pulse"></div>
-            <span className="text-xs text-success">ONLINE</span>
+            <div className={cn(
+              "w-2 h-2 rounded-full animate-pulse",
+              isConnected ? "bg-success" : "bg-muted"
+            )}></div>
+            <span className="text-xs text-success">
+              {isConnected ? "CONNECTED" : "OFFLINE"}
+            </span>
           </div>
         </div>
 
@@ -129,29 +120,17 @@ export const CommandCenter = () => {
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Command Input Area */}
+        {/* Connection Status */}
         <div className="p-3 bg-muted/20 rounded-lg border border-border/30">
           <p className="text-xs text-muted-foreground mb-2">
-            {eyeTrackingActive ? "Voice commands, text input, or gaze selection available" : "Voice commands or text input"}
+            ElevenLabs Conversational AI - Voice-only interaction
           </p>
-          <div className="flex space-x-2">
-            <Input
-              value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              onKeyPress={handleKeyPress}
-              placeholder="Type your command..."
-              disabled={isProcessing}
-              className="flex-1 bg-background/50 border-primary/20 focus:border-primary/40"
-            />
-            <Button 
-              onClick={handleSendMessage}
-              disabled={!inputValue.trim() || isProcessing}
-              size="sm"
-              className="px-3"
-            >
-              <Send className="h-4 w-4" />
-            </Button>
-          </div>
+          <p className="text-sm text-foreground">
+            {isConnected 
+              ? "🎤 Connected - Speak naturally to JARVIS" 
+              : "📞 Click the phone button in Voice Interface to connect"
+            }
+          </p>
         </div>
       </div>
     </JarvisPanel>
