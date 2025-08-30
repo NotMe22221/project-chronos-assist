@@ -32,10 +32,17 @@ serve(async (req) => {
       }
     ]
 
+    const apiKey = Deno.env.get('OPENAI_API_KEY')
+    if (!apiKey) {
+      throw new Error('OpenAI API key not configured')
+    }
+
+    console.log('Sending request to OpenAI...')
+
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${Deno.env.get('OPENAI_API_KEY')}`,
+        'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -47,15 +54,30 @@ serve(async (req) => {
     })
 
     if (!response.ok) {
-      const error = await response.text()
-      console.error('OpenAI API error:', error)
-      throw new Error(`AI chat failed: ${error}`)
+      const errorText = await response.text()
+      console.error('OpenAI API error:', response.status, errorText)
+      
+      // Handle specific error cases
+      if (response.status === 401) {
+        throw new Error('Invalid OpenAI API key')
+      } else if (response.status === 429) {
+        throw new Error('OpenAI API rate limit exceeded')
+      } else if (errorText.includes('insufficient_quota')) {
+        throw new Error('OpenAI quota exceeded. Please check your billing.')
+      }
+      
+      throw new Error(`OpenAI API error: ${response.status} ${errorText}`)
     }
 
     const data = await response.json()
+    
+    if (!data.choices || !data.choices[0] || !data.choices[0].message) {
+      throw new Error('Invalid response from OpenAI API')
+    }
+    
     const aiResponse = data.choices[0].message.content
 
-    console.log('AI response:', aiResponse)
+    console.log('AI response received successfully')
 
     return new Response(JSON.stringify({ 
       response: aiResponse,
@@ -66,7 +88,9 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('AI chat error:', error)
-    return new Response(JSON.stringify({ error: error.message }), {
+    return new Response(JSON.stringify({ 
+      error: error.message || 'Failed to process AI chat request'
+    }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
