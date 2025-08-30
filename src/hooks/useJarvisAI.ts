@@ -50,11 +50,28 @@ export const useJarvisAI = () => {
         body: { audio: base64Audio }
       });
 
-      if (error) throw error;
-      return data.text || '';
+      // Handle Supabase error or function-level error payloads
+      if (error) {
+        const msg = typeof error.message === 'string' ? error.message : 'Transcription failed';
+        if (msg.toLowerCase().includes('insufficient_quota')) {
+          throw new Error('Speech-to-text unavailable: OpenAI quota exceeded. Update your OPENAI_API_KEY in Supabase Settings > Functions or use text input.');
+        }
+        throw new Error(msg);
+      }
+
+      if (data?.error) {
+        const msg = String(data.error);
+        if (msg.toLowerCase().includes('insufficient_quota')) {
+          throw new Error('Speech-to-text unavailable: OpenAI quota exceeded. Update your OPENAI_API_KEY in Supabase Settings > Functions or use text input.');
+        }
+        throw new Error(msg);
+      }
+
+      return data?.text || '';
     } catch (error) {
       console.error('Transcription error:', error);
-      throw new Error('Failed to transcribe audio');
+      const message = error instanceof Error ? error.message : 'Failed to transcribe audio';
+      throw new Error(message);
     }
   }, []);
 
@@ -81,6 +98,7 @@ export const useJarvisAI = () => {
   }, []);
 
   const speakText = useCallback(async (text: string): Promise<void> => {
+    let usedFallback = false;
     try {
       setIsSpeaking(true);
       
@@ -92,12 +110,29 @@ export const useJarvisAI = () => {
       
       await audioPlayer.current.playBase64Audio(data.audioContent);
     } catch (error) {
-      console.error('Text-to-speech error:', error);
+      console.error('Text-to-speech error (falling back to browser TTS if available):', error);
+      // Fallback to Browser TTS if available
+      try {
+        if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+          usedFallback = true;
+          const utter = new SpeechSynthesisUtterance(text);
+          utter.onend = () => setIsSpeaking(false);
+          // Use a neutral voice if available
+          const voices = window.speechSynthesis.getVoices();
+          if (voices?.length) utter.voice = voices.find(v => /en/i.test(v.lang)) || voices[0];
+          window.speechSynthesis.cancel();
+          window.speechSynthesis.speak(utter);
+          toast({ title: 'Using browser TTS', description: 'Edge TTS unavailable, fell back to SpeechSynthesis.' });
+          return;
+        }
+      } catch (e) {
+        console.warn('Browser TTS fallback failed:', e);
+      }
       throw new Error('Failed to speak text');
     } finally {
-      setIsSpeaking(false);
+      if (!usedFallback) setIsSpeaking(false);
     }
-  }, []);
+  }, [toast]);
 
   const startListening = useCallback(async () => {
     try {
