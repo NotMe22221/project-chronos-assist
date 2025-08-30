@@ -180,7 +180,7 @@
   }
 
   .touch-target:active {
-    @apply bg-primary/10 scale-98;
+    @apply bg-primary/10 scale-[0.98];
   }
 
   /* Gaze hover effects for eye tracking */
