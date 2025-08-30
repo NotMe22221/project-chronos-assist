@@ -11,7 +11,14 @@ import { cn } from '@/lib/utils';
 
 export const CommandCenter = () => {
   const { messages, isConnected, isSpeaking } = useElevenLabsConversation();
-  const { isActive: eyeTrackingActive, startEyeTracking, calibrateEyeTracking } = useEyeTracking();
+  const { 
+    isActive: eyeTrackingActive, 
+    isCalibrated,
+    isLoading: eyeTrackingLoading,
+    startEyeTracking, 
+    calibrateEyeTracking,
+    stopEyeTracking
+  } = useEyeTracking();
   const { addGestureSupport } = useTouchNavigation();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -62,24 +69,41 @@ export const CommandCenter = () => {
               size="sm" 
               variant="outline"
               onClick={startEyeTracking}
+              disabled={eyeTrackingLoading}
               className="text-xs"
             >
-              Enable Eye Tracking
+              {eyeTrackingLoading ? "Starting..." : "Enable Eye Tracking"}
             </Button>
           </div>
         )}
 
         {eyeTrackingActive && (
           <div className="hidden lg:flex items-center justify-between p-3 bg-primary/10 rounded-lg border border-primary/20">
-            <span className="text-sm text-primary">Eye Tracking Active</span>
-            <Button 
-              size="sm" 
-              variant="outline"
-              onClick={calibrateEyeTracking}
-              className="text-xs"
-            >
-              Calibrate
-            </Button>
+            <div className="flex flex-col">
+              <span className="text-sm text-primary">Eye Tracking Active</span>
+              {isCalibrated && (
+                <span className="text-xs text-success">Calibrated ✓</span>
+              )}
+            </div>
+            <div className="flex space-x-2">
+              <Button 
+                size="sm" 
+                variant="outline"
+                onClick={calibrateEyeTracking}
+                disabled={eyeTrackingLoading}
+                className="text-xs"
+              >
+                {eyeTrackingLoading ? "Calibrating..." : "Calibrate"}
+              </Button>
+              <Button 
+                size="sm" 
+                variant="destructive"
+                onClick={stopEyeTracking}
+                className="text-xs"
+              >
+                Stop
+              </Button>
+            </div>
           </div>
         )}
 
