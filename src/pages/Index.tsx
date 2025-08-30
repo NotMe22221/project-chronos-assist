@@ -5,7 +5,6 @@ import { DataVisualization } from '@/components/DataVisualization';
 import { useEyeTracking } from '@/hooks/useEyeTracking';
 import { useTouchNavigation } from '@/hooks/useTouchNavigation';
 import { useEffect, useRef } from 'react';
-import jarvisBg from '@/assets/jarvis-bg.jpg';
 
 const Index = () => {
   const { gazePosition } = useEyeTracking();
@@ -37,14 +36,18 @@ const Index = () => {
       ref={mainRef}
       className="min-h-screen bg-background relative overflow-hidden touch-target"
       style={{
-        backgroundImage: `url(${jarvisBg})`,
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-        backgroundAttachment: 'fixed'
+        backgroundImage: `
+          linear-gradient(rgba(0, 100, 255, 0.1) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(0, 100, 255, 0.1) 1px, transparent 1px),
+          radial-gradient(circle at 50% 50%, rgba(0, 100, 255, 0.3) 0%, transparent 70%)
+        `,
+        backgroundSize: '50px 50px, 50px 50px, 100% 100%',
+        backgroundPosition: '0 0, 0 0, center',
+        animation: 'grid-glow 4s ease-in-out infinite alternate'
       }}
     >
-      {/* Background overlay */}
-      <div className="absolute inset-0 bg-background/90 backdrop-blur-sm" />
+      {/* Background overlay for better readability */}
+      <div className="absolute inset-0 bg-background/80 backdrop-blur-[1px]" />
       
       {/* Main content */}
       <div className="relative z-10 p-4 md:p-6 lg:p-8">
@@ -175,6 +178,17 @@ const Index = () => {
           </p>
         </footer>
       </div>
+
+      <style jsx>{`
+        @keyframes grid-glow {
+          0% {
+            filter: brightness(1) contrast(1);
+          }
+          100% {
+            filter: brightness(1.2) contrast(1.1);
+          }
+        }
+      `}</style>
     </div>
   );
 };
