@@ -37,10 +37,10 @@ const Index = () => {
     style.textContent = `
       @keyframes grid-glow {
         0% {
-          filter: brightness(1) contrast(1);
+          opacity: 0.3;
         }
         100% {
-          filter: brightness(1.2) contrast(1.1);
+          opacity: 0.6;
         }
       }
     `;
@@ -57,17 +57,26 @@ const Index = () => {
       className="min-h-screen bg-background relative overflow-hidden touch-target"
       style={{
         backgroundImage: `
-          linear-gradient(rgba(0, 100, 255, 0.1) 1px, transparent 1px),
-          linear-gradient(90deg, rgba(0, 100, 255, 0.1) 1px, transparent 1px),
-          radial-gradient(circle at 50% 50%, rgba(0, 100, 255, 0.3) 0%, transparent 70%)
+          linear-gradient(hsl(200 100% 50% / 0.4) 1px, transparent 1px),
+          linear-gradient(90deg, hsl(200 100% 50% / 0.4) 1px, transparent 1px)
         `,
-        backgroundSize: '50px 50px, 50px 50px, 100% 100%',
-        backgroundPosition: '0 0, 0 0, center',
-        animation: 'grid-glow 4s ease-in-out infinite alternate'
+        backgroundSize: '40px 40px',
+        animation: 'grid-glow 3s ease-in-out infinite alternate'
       }}
     >
+      {/* Grid overlay for enhanced glow effect */}
+      <div 
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          backgroundImage: `
+            radial-gradient(circle at 50% 50%, hsl(200 100% 50% / 0.1) 0%, transparent 50%)
+          `,
+          backgroundSize: '80px 80px'
+        }}
+      />
+      
       {/* Background overlay for better readability */}
-      <div className="absolute inset-0 bg-background/80 backdrop-blur-[1px]" />
+      <div className="absolute inset-0 bg-background/60 backdrop-blur-[1px]" />
       
       {/* Main content */}
       <div className="relative z-10 p-4 md:p-6 lg:p-8">
