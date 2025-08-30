@@ -1,3 +1,4 @@
+
 import { VoiceInterface } from '@/components/VoiceInterface';
 import { CommandCenter } from '@/components/CommandCenter';
 import { DataVisualization } from '@/components/DataVisualization';
@@ -20,7 +21,6 @@ const Index = () => {
       setCallbacks({
         onSwipe: (gesture) => {
           console.log('Swipe detected:', gesture);
-          // You can add scroll or navigation logic here
           if (gesture.direction === 'up' || gesture.direction === 'down') {
             const scrollAmount = gesture.direction === 'up' ? -200 : 200;
             window.scrollBy({ top: scrollAmount, behavior: 'smooth' });
@@ -31,6 +31,7 @@ const Index = () => {
       return cleanup;
     }
   }, [addGestureSupport, setCallbacks]);
+
   return (
     <div 
       ref={mainRef}
@@ -58,7 +59,7 @@ const Index = () => {
             Just A Rather Very Intelligent System
           </p>
           <div className="flex items-center justify-center mt-4 space-x-2">
-            <div className="w-2 h-2 bg-success rounded-full animate-pulse"></div>
+            <div className="w-2 h-2 bg-success rounded-full"></div>
             <span className="text-xs text-success font-mono">SYSTEM ONLINE - AI READY</span>
           </div>
           
@@ -72,7 +73,7 @@ const Index = () => {
 
         {/* Dashboard Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 max-w-7xl mx-auto">
-          {/* Left Column - Voice Interface & Data */}
+          {/* Left Column - Voice Interface & Status */}
           <div className="space-y-6">
             <VoiceInterface />
             <div className="hidden lg:block">
@@ -87,13 +88,13 @@ const Index = () => {
 
           {/* Right Column - Additional Panels */}
           <div className="space-y-6">
-            {/* Mobile Data Visualization */}
+            {/* Mobile Status */}
             <div className="lg:hidden">
               <DataVisualization />
             </div>
             
             {/* Quick Commands Panel */}
-            <div className="jarvis-panel jarvis-glow touch-target">
+            <div className="jarvis-panel touch-target">
               <div className="p-6">
                 <h3 className="text-primary font-semibold text-glow mb-4">Voice Commands</h3>
                 <div className="space-y-3">
@@ -109,7 +110,7 @@ const Index = () => {
                       className="p-3 bg-gradient-panel rounded border border-primary/20 hover:border-primary/40 transition-colors cursor-pointer group touch-target gaze-hover"
                     >
                       <div className="flex items-center space-x-3">
-                        <div className="w-2 h-2 bg-secondary rounded-full group-hover:animate-pulse"></div>
+                        <div className="w-2 h-2 bg-secondary rounded-full"></div>
                         <span className="text-sm text-foreground group-hover:text-primary transition-colors">
                           "{command}"
                         </span>
@@ -128,35 +129,35 @@ const Index = () => {
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-muted-foreground">Voice Recognition</span>
                     <div className="flex items-center space-x-2">
-                      <div className="w-2 h-2 bg-success rounded-full animate-pulse"></div>
+                      <div className="w-2 h-2 bg-success rounded-full"></div>
                       <span className="text-xs text-success">READY</span>
                     </div>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-muted-foreground">AI Processing</span>
                     <div className="flex items-center space-x-2">
-                      <div className="w-2 h-2 bg-success rounded-full animate-pulse"></div>
+                      <div className="w-2 h-2 bg-success rounded-full"></div>
                       <span className="text-xs text-success">ACTIVE</span>
                     </div>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-muted-foreground">Eye Tracking</span>
                     <div className="flex items-center space-x-2">
-                      <div className="w-2 h-2 bg-success rounded-full animate-pulse"></div>
+                      <div className="w-2 h-2 bg-success rounded-full"></div>
                       <span className="text-xs text-success">AVAILABLE</span>
                     </div>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-muted-foreground">Speech Synthesis</span>
                     <div className="flex items-center space-x-2">
-                      <div className="w-2 h-2 bg-success rounded-full animate-pulse"></div>
+                      <div className="w-2 h-2 bg-success rounded-full"></div>
                       <span className="text-xs text-success">READY</span>
                     </div>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-muted-foreground">Touch Navigation</span>
                     <div className="flex items-center space-x-2">
-                      <div className="w-2 h-2 bg-success rounded-full animate-pulse"></div>
+                      <div className="w-2 h-2 bg-success rounded-full"></div>
                       <span className="text-xs text-success">ENABLED</span>
                     </div>
                   </div>
