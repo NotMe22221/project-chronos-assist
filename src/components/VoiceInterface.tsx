@@ -72,7 +72,7 @@ export const VoiceInterface = () => {
         {/* Volume Control */}
         {isConnected && (
           <div className="space-y-2">
-            <label className="text-sm text-muted-foreground">Volume</label>
+            <label className="text-sm font-medium text-foreground drop-shadow-lg">Volume</label>
             <Slider
               value={volumeLevel}
               onValueChange={handleVolumeChange}
@@ -84,15 +84,15 @@ export const VoiceInterface = () => {
           </div>
         )}
         
-        <div className="min-h-[80px] p-4 bg-muted/30 rounded-lg border border-primary/20">
-          <p className="text-sm text-muted-foreground mb-2">Status:</p>
-          <p className="text-foreground">
+        <div className="min-h-[80px] p-4 bg-background/90 backdrop-blur-sm rounded-lg border border-primary/20 shadow-lg">
+          <p className="text-sm font-medium text-foreground/80 mb-2 drop-shadow">Status:</p>
+          <p className="text-foreground font-medium drop-shadow-lg">
             {isConnected 
               ? `Connected - ${isSpeaking ? 'JARVIS is speaking...' : 'Ready for voice commands'}` 
               : 'Click to connect and start talking to JARVIS'
             }
           </p>
-          <p className="text-xs text-muted-foreground mt-2">
+          <p className="text-xs text-foreground/70 mt-2 drop-shadow">
             Connection Status: {status}
           </p>
         </div>
@@ -103,7 +103,7 @@ export const VoiceInterface = () => {
               "w-2 h-2 rounded-full",
               isConnected ? "bg-primary animate-pulse" : "bg-muted"
             )}></div>
-            <span className="text-xs text-muted-foreground">
+            <span className="text-xs font-medium text-foreground drop-shadow-lg">
               {isConnected ? "CONNECTED" : "DISCONNECTED"}
             </span>
           </div>
