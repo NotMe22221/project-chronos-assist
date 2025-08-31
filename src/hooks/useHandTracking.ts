@@ -33,6 +33,7 @@ export const useHandTracking = () => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const lastClickTime = useRef<number>(0);
+  const animationFrameRef = useRef<number>(0);
   const { toast } = useToast();
 
   // Load MediaPipe scripts robustly (idempotent, with verification)
@@ -168,6 +169,30 @@ export const useHandTracking = () => {
     }
   }, []);
 
+  // Continuous drawing function to ensure video feed is always visible
+  const drawVideoFeed = useCallback(() => {
+    if (!canvasRef.current || !videoRef.current) return;
+
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    // Clear canvas
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Draw video frame
+    try {
+      ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+    } catch (error) {
+      // Video might not be ready yet, that's ok
+    }
+
+    // Continue drawing
+    if (isActive) {
+      animationFrameRef.current = requestAnimationFrame(drawVideoFeed);
+    }
+  }, [isActive]);
+
   const onResults = useCallback((results: any) => {
     if (!canvasRef.current || !videoRef.current) return;
 
@@ -178,19 +203,18 @@ export const useHandTracking = () => {
     // Clear canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // ALWAYS draw a frame first: prefer MediaPipe's processed image
-    const source: CanvasImageSource | null = (results && results.image) ? results.image : videoRef.current;
-    if (source) {
-      ctx.drawImage(source as any, 0, 0, canvas.width, canvas.height);
-    } else {
-      console.warn('[HandTracking] No frame source available to draw.');
+    // Draw video frame first
+    try {
+      ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+    } catch (error) {
+      console.warn('[HandTracking] Could not draw video frame:', error);
     }
 
     if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
       const landmarks = results.multiHandLandmarks[0] as HandLandmark[];
       
-      // Draw hand landmarks color using resolved theme token
-      const primaryColor = getCssHsl('--primary'); // converts "200 98% 52%" => "hsl(200 98% 52%)"
+      // Draw hand landmarks with theme colors
+      const primaryColor = getCssHsl('--primary', '#3b82f6');
       ctx.fillStyle = primaryColor;
       ctx.strokeStyle = primaryColor;
       ctx.lineWidth = 2;
@@ -246,33 +270,41 @@ export const useHandTracking = () => {
     setIsLoading(true);
     try {
       console.log('[HandTracking] Requesting camera...');
-      // Request camera permission
+      
+      // Request camera permission with specific constraints
       const stream = await navigator.mediaDevices.getUserMedia({ 
         video: { 
-          width: 640, 
-          height: 480,
+          width: { ideal: 640 }, 
+          height: { ideal: 480 },
           facingMode: 'user'
         } 
       });
       
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        await new Promise((resolve) => {
-          videoRef.current!.onloadedmetadata = resolve;
+        
+        // Wait for video to load and start playing
+        await new Promise((resolve, reject) => {
+          if (!videoRef.current) return reject(new Error('Video ref lost'));
+          
+          videoRef.current.onloadedmetadata = () => {
+            if (!videoRef.current) return reject(new Error('Video ref lost'));
+            
+            // Set canvas dimensions to match video
+            if (canvasRef.current) {
+              canvasRef.current.width = videoRef.current.videoWidth || 640;
+              canvasRef.current.height = videoRef.current.videoHeight || 480;
+              console.log('[HandTracking] Canvas sized to', canvasRef.current.width, 'x', canvasRef.current.height);
+            }
+            
+            videoRef.current.play()
+              .then(() => {
+                console.log('[HandTracking] Video playing');
+                resolve(true);
+              })
+              .catch(reject);
+          };
         });
-        // Ensure the video actually starts playing
-        await videoRef.current.play().catch((e) => {
-          console.warn('[HandTracking] video.play() was blocked or failed:', e);
-        });
-
-        // Match canvas resolution to actual stream resolution for crisp rendering
-        if (canvasRef.current) {
-          const vw = (videoRef.current as HTMLVideoElement).videoWidth || 640;
-          const vh = (videoRef.current as HTMLVideoElement).videoHeight || 480;
-          canvasRef.current.width = vw;
-          canvasRef.current.height = vh;
-          console.log('[HandTracking] Canvas sized to', vw, 'x', vh);
-        }
       }
 
       // Wait for MediaPipe to be available
@@ -297,7 +329,7 @@ export const useHandTracking = () => {
       });
 
       handsInstance.setOptions({
-        selfieMode: true,            // mirror for front camera
+        selfieMode: true,
         maxNumHands: 1,
         modelComplexity: 1,
         minDetectionConfidence: 0.5,
@@ -323,12 +355,16 @@ export const useHandTracking = () => {
         setCamera(cameraInstance);
       }
 
+      // Start continuous video feed drawing
+      drawVideoFeed();
+
       setIsActive(true);
       toast({
         title: "Hand Tracking Active",
         description: "Hand gestures are now being detected. Make gestures to control the interface.",
       });
-      console.log('[HandTracking] Started.');
+      console.log('[HandTracking] Started successfully');
+      
     } catch (error) {
       console.error('Hand tracking error:', error);
       toast({
@@ -340,9 +376,14 @@ export const useHandTracking = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [isLoading, toast]);
+  }, [isLoading, onResults, drawVideoFeed, toast]);
 
   const stopHandTracking = useCallback(() => {
+    // Cancel animation frame
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+    }
+
     if (camera) {
       camera.stop();
       setCamera(null);
@@ -351,7 +392,7 @@ export const useHandTracking = () => {
     if (videoRef.current && videoRef.current.srcObject) {
       const stream = videoRef.current.srcObject as MediaStream;
       stream.getTracks().forEach(track => track.stop());
-      (videoRef.current as HTMLVideoElement).srcObject = null;
+      videoRef.current.srcObject = null;
     }
     
     setIsActive(false);
@@ -359,6 +400,18 @@ export const useHandTracking = () => {
     setHands(null);
     console.log('[HandTracking] Stopped.');
   }, [camera]);
+
+  // Start drawing loop when active
+  useEffect(() => {
+    if (isActive) {
+      drawVideoFeed();
+    }
+    return () => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+    };
+  }, [isActive, drawVideoFeed]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -384,4 +437,3 @@ declare global {
     Camera: any;
   }
 }
-
