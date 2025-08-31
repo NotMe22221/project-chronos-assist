@@ -2,6 +2,7 @@
 import { VoiceInterface } from '@/components/VoiceInterface';
 import { CommandCenter } from '@/components/CommandCenter';
 import { DataVisualization } from '@/components/DataVisualization';
+import { HandTracking } from '@/components/HandTracking';
 import { useEyeTracking } from '@/hooks/useEyeTracking';
 import { useTouchNavigation } from '@/hooks/useTouchNavigation';
 import { useEffect, useRef } from 'react';
@@ -144,8 +145,11 @@ const Index = () => {
             <CommandCenter />
           </div>
 
-          {/* Right Column - Additional Panels */}
+          {/* Right Column - Hand Tracking & Additional Panels */}
           <div className="space-y-6">
+            {/* Hand Tracking Component */}
+            <HandTracking />
+            
             {/* Mobile Status */}
             <div className="lg:hidden">
               <DataVisualization />
@@ -222,6 +226,75 @@ const Index = () => {
                       <span className="text-xs text-success text-glow">ENABLED</span>
                     </div>
                   </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Additional Scrollable Content for Testing */}
+        <div className="mt-16 max-w-4xl mx-auto space-y-8">
+          <div className="jarvis-panel touch-target jarvis-glow">
+            <div className="p-6">
+              <h3 className="text-primary font-semibold text-glow mb-4">Hand Gesture Testing Area</h3>
+              <div className="space-y-4 text-sm text-muted-foreground">
+                <p>This section provides additional scrollable content to test the hand gesture controls:</p>
+                <ul className="list-disc list-inside space-y-2 ml-4">
+                  <li><strong>Fist (✊)</strong> - Scroll up to see previous content</li>
+                  <li><strong>Open Hand (🖐️)</strong> - Scroll down to see more content</li>
+                  <li><strong>Peace Sign (✌️)</strong> - Click the test button in the Hand Tracking panel</li>
+                </ul>
+                <p>The hand tracking system uses MediaPipe Hands for real-time gesture recognition and works on both desktop and mobile browsers with camera access.</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="jarvis-panel touch-target jarvis-glow">
+            <div className="p-6">
+              <h3 className="text-secondary font-semibold text-glow mb-4">AI Integration Status</h3>
+              <div className="space-y-3 text-sm">
+                <div className="flex justify-between items-center">
+                  <span className="text-muted-foreground">Voice Recognition</span>
+                  <div className="flex items-center space-x-2">
+                    <div className="w-3 h-3 bg-success rounded-full shadow-[0_0_15px_hsl(var(--success))]"></div>
+                    <span className="text-xs text-success text-glow">ACTIVE</span>
+                  </div>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-muted-foreground">Hand Tracking</span>
+                  <div className="flex items-center space-x-2">
+                    <div className="w-3 h-3 bg-success rounded-full shadow-[0_0_15px_hsl(var(--success))]"></div>
+                    <span className="text-xs text-success text-glow">AVAILABLE</span>
+                  </div>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-muted-foreground">Eye Tracking</span>
+                  <div className="flex items-center space-x-2">
+                    <div className="w-3 h-3 bg-success rounded-full shadow-[0_0_15px_hsl(var(--success))]"></div>
+                    <span className="text-xs text-success text-glow">READY</span>
+                  </div>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-muted-foreground">Multi-Modal Control</span>
+                  <div className="flex items-center space-x-2">
+                    <div className="w-3 h-3 bg-success rounded-full shadow-[0_0_15px_hsl(var(--success))]"></div>
+                    <span className="text-xs text-success text-glow">INTEGRATED</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="jarvis-panel touch-target jarvis-glow">
+            <div className="p-6">
+              <h3 className="text-primary font-semibold text-glow mb-4">Scrollable Content Demo</h3>
+              <div className="space-y-4 text-sm text-muted-foreground">
+                <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris.</p>
+                <p>Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.</p>
+                <p>Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt.</p>
+                <div className="p-4 bg-primary/10 rounded border border-primary/20 mt-4">
+                  <p className="text-primary font-medium">Hand Gesture Tip:</p>
+                  <p className="text-xs mt-1">Make sure your hand is clearly visible in the camera feed and gestures are deliberate for best recognition accuracy.</p>
                 </div>
               </div>
             </div>
