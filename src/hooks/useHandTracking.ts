@@ -13,6 +13,16 @@ interface HandLandmark {
   z: number;
 }
 
+// Helper to resolve HSL theme tokens (like --primary: 200 98% 52%) into a valid color for canvas
+const getCssHsl = (varName: string, fallback = 'hsl(200 100% 50%)') => {
+  try {
+    const value = getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
+    return value ? `hsl(${value})` : fallback;
+  } catch {
+    return fallback;
+  }
+};
+
 export const useHandTracking = () => {
   const [isActive, setIsActive] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -24,28 +34,44 @@ export const useHandTracking = () => {
   const lastClickTime = useRef<number>(0);
   const { toast } = useToast();
 
-  // Load MediaPipe scripts
+  // Load MediaPipe scripts robustly (idempotent, with verification)
   useEffect(() => {
     const loadMediaPipe = async () => {
-      // Load MediaPipe scripts
+      if ((window as any).Hands && (window as any).Camera) {
+        console.log('[HandTracking] MediaPipe already available');
+        return;
+      }
+
       const scripts = [
         'https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js',
-        'https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js',
-        'https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js',
         'https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js'
       ];
 
       for (const src of scripts) {
-        const script = document.createElement('script');
-        script.src = src;
-        script.async = true;
-        document.head.appendChild(script);
-        
-        await new Promise((resolve, reject) => {
-          script.onload = resolve;
-          script.onerror = reject;
-        });
+        // Avoid duplicate script tags
+        let script = document.querySelector(`script[src="${src}"]`) as HTMLScriptElement | null;
+        if (!script) {
+          script = document.createElement('script');
+          script.src = src;
+          script.async = true;
+          document.head.appendChild(script);
+          console.log('[HandTracking] Loading script:', src);
+          await new Promise((resolve, reject) => {
+            script!.onload = resolve as any;
+            script!.onerror = () => reject(new Error(`Failed to load: ${src}`));
+          });
+        } else {
+          // If script exists but may not be loaded yet, wait one microtask
+          await Promise.resolve();
+        }
       }
+
+      // Verify globals are present
+      if (!(window as any).Hands || !(window as any).Camera) {
+        throw new Error('MediaPipe globals not available after loading scripts.');
+      }
+
+      console.log('[HandTracking] MediaPipe loaded.');
     };
 
     loadMediaPipe().catch((error) => {
@@ -129,6 +155,7 @@ export const useHandTracking = () => {
           // Find and click the test button
           const testButton = document.querySelector('[data-hand-clickable="true"]') as HTMLElement;
           if (testButton) {
+            console.log('[HandTracking] Peace sign detected: clicking test button');
             testButton.click();
             testButton.style.transform = 'scale(0.95)';
             setTimeout(() => {
@@ -154,11 +181,12 @@ export const useHandTracking = () => {
     ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
 
     if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-      const landmarks = results.multiHandLandmarks[0];
+      const landmarks = results.multiHandLandmarks[0] as HandLandmark[];
       
-      // Draw hand landmarks
-      ctx.fillStyle = 'hsl(var(--primary))';
-      ctx.strokeStyle = 'hsl(var(--primary))';
+      // Draw hand landmarks color using resolved theme token
+      const primaryColor = getCssHsl('--primary'); // converts "200 98% 52%" => "hsl(200 98% 52%)"
+      ctx.fillStyle = primaryColor;
+      ctx.strokeStyle = primaryColor;
       ctx.lineWidth = 2;
       
       // Draw connections
@@ -169,7 +197,7 @@ export const useHandTracking = () => {
         [9, 13], [13, 14], [14, 15], [15, 16], // Ring
         [13, 17], [17, 18], [18, 19], [19, 20], // Pinky
         [0, 17] // Palm
-      ];
+      ] as const;
       
       connections.forEach(([start, end]) => {
         const startPoint = landmarks[start];
@@ -211,6 +239,7 @@ export const useHandTracking = () => {
     
     setIsLoading(true);
     try {
+      console.log('[HandTracking] Requesting camera...');
       // Request camera permission
       const stream = await navigator.mediaDevices.getUserMedia({ 
         video: { 
@@ -225,9 +254,11 @@ export const useHandTracking = () => {
       }
 
       // Wait for MediaPipe to be available
-      await new Promise((resolve) => {
+      await new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error('MediaPipe load timeout')), 15000);
         const checkMediaPipe = () => {
-          if (window.Hands && window.Camera) {
+          if ((window as any).Hands && (window as any).Camera) {
+            clearTimeout(timeout);
             resolve(true);
           } else {
             setTimeout(checkMediaPipe, 100);
@@ -237,13 +268,14 @@ export const useHandTracking = () => {
       });
 
       // Initialize MediaPipe Hands
-      const handsInstance = new window.Hands({
+      const handsInstance = new (window as any).Hands({
         locateFile: (file: string) => {
           return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
         }
       });
 
       handsInstance.setOptions({
+        selfieMode: true,            // mirror for front camera
         maxNumHands: 1,
         modelComplexity: 1,
         minDetectionConfidence: 0.5,
@@ -255,7 +287,7 @@ export const useHandTracking = () => {
 
       // Initialize camera
       if (videoRef.current) {
-        const cameraInstance = new window.Camera(videoRef.current, {
+        const cameraInstance = new (window as any).Camera(videoRef.current, {
           onFrame: async () => {
             if (videoRef.current) {
               await handsInstance.send({ image: videoRef.current });
@@ -274,7 +306,7 @@ export const useHandTracking = () => {
         title: "Hand Tracking Active",
         description: "Hand gestures are now being detected. Make gestures to control the interface.",
       });
-
+      console.log('[HandTracking] Started.');
     } catch (error) {
       console.error('Hand tracking error:', error);
       toast({
@@ -297,12 +329,13 @@ export const useHandTracking = () => {
     if (videoRef.current && videoRef.current.srcObject) {
       const stream = videoRef.current.srcObject as MediaStream;
       stream.getTracks().forEach(track => track.stop());
-      videoRef.current.srcObject = null;
+      (videoRef.current as HTMLVideoElement).srcObject = null;
     }
     
     setIsActive(false);
     setCurrentGesture(null);
     setHands(null);
+    console.log('[HandTracking] Stopped.');
   }, [camera]);
 
   // Cleanup on unmount
