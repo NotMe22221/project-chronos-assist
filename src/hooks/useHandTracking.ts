@@ -295,46 +295,36 @@ export const useHandTracking = (): HandTrackingResult => {
         throw new Error('Camera access not supported in this browser');
       }
       
-      addLog('Loading MediaPipe libraries...');
+      addLog('Loading MediaPipe libraries (CDN)...');
       
-      // Load MediaPipe Hands with proper import handling
-      let HandsModule, CameraModule;
-      try {
-        HandsModule = await import('@mediapipe/hands');
-        CameraModule = await import('@mediapipe/camera_utils');
-      } catch (importError) {
-        console.error('Import error:', importError);
-        throw new Error('Failed to load MediaPipe libraries');
-      }
-      
-      // Extract Hands constructor with fallback
-      const Hands = HandsModule.Hands || HandsModule.default?.Hands || HandsModule.default;
-      const Camera = CameraModule.Camera || CameraModule.default?.Camera || CameraModule.default;
-      
-      if (!Hands) {
-        console.error('HandsModule:', HandsModule);
-        throw new Error('Hands constructor not found in MediaPipe module');
-      }
-      
-      if (!Camera) {
-        console.error('CameraModule:', CameraModule);
-        throw new Error('Camera constructor not found in MediaPipe module');
-      }
+      // Load MediaPipe via script tags to avoid bundler constructor issues
+      const loadScript = (src: string) =>
+        new Promise<void>((resolve, reject) => {
+          if (document.querySelector(`script[src="${src}"]`)) return resolve();
+          const s = document.createElement('script');
+          s.src = src;
+          s.async = true;
+          s.onload = () => resolve();
+          s.onerror = () => reject(new Error(`Failed to load script ${src}`));
+          document.head.appendChild(s);
+        });
+
+      await Promise.all([
+        loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js'),
+        loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js')
+      ]);
       
       addLog('MediaPipe libraries loaded successfully');
       
-      // Initialize MediaPipe Hands with better error handling
+      // Initialize MediaPipe Hands using global constructor
       let hands;
       try {
-        hands = new Hands({
-          locateFile: (file: string) => {
-            return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
-          }
+        hands = new (window as any).Hands({
+          locateFile: (file: string) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`,
         });
-      } catch (constructorError) {
-        console.error('Hands constructor error:', constructorError);
-        console.error('Hands type:', typeof Hands);
-        throw new Error(`Failed to create Hands instance: ${constructorError.message}`);
+      } catch (constructorError: any) {
+        console.error('Hands constructor error (CDN):', constructorError, { globalHands: (window as any).Hands });
+        throw new Error(`Failed to create Hands instance: ${constructorError?.message || constructorError}`);
       }
       
       // Configure hand detection settings
@@ -350,8 +340,8 @@ export const useHandTracking = (): HandTrackingResult => {
       
       addLog('Initializing camera...');
       
-      // Initialize camera with frame processing
-      const camera = new Camera(videoRef.current, {
+      // Initialize camera with frame processing using global Camera
+      const camera = new (window as any).Camera(videoRef.current, {
         onFrame: async () => {
           try {
             if (handsRef.current && videoRef.current && videoRef.current.readyState >= 2) {
