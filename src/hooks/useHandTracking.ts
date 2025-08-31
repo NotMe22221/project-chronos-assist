@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useToast } from '@/hooks/use-toast';
 
@@ -176,9 +177,14 @@ export const useHandTracking = () => {
 
     // Clear canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    
-    // ALWAYS draw video frame first (this was the missing piece)
-    ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+
+    // ALWAYS draw a frame first: prefer MediaPipe's processed image
+    const source: CanvasImageSource | null = (results && results.image) ? results.image : videoRef.current;
+    if (source) {
+      ctx.drawImage(source as any, 0, 0, canvas.width, canvas.height);
+    } else {
+      console.warn('[HandTracking] No frame source available to draw.');
+    }
 
     if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
       const landmarks = results.multiHandLandmarks[0] as HandLandmark[];
@@ -254,6 +260,19 @@ export const useHandTracking = () => {
         await new Promise((resolve) => {
           videoRef.current!.onloadedmetadata = resolve;
         });
+        // Ensure the video actually starts playing
+        await videoRef.current.play().catch((e) => {
+          console.warn('[HandTracking] video.play() was blocked or failed:', e);
+        });
+
+        // Match canvas resolution to actual stream resolution for crisp rendering
+        if (canvasRef.current) {
+          const vw = (videoRef.current as HTMLVideoElement).videoWidth || 640;
+          const vh = (videoRef.current as HTMLVideoElement).videoHeight || 480;
+          canvasRef.current.width = vw;
+          canvasRef.current.height = vh;
+          console.log('[HandTracking] Canvas sized to', vw, 'x', vh);
+        }
       }
 
       // Wait for MediaPipe to be available
@@ -321,7 +340,7 @@ export const useHandTracking = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [isLoading, onResults, toast]);
+  }, [isLoading, toast]);
 
   const stopHandTracking = useCallback(() => {
     if (camera) {
@@ -365,3 +384,4 @@ declare global {
     Camera: any;
   }
 }
+
