@@ -2,7 +2,7 @@
 import { useHandTracking } from '@/hooks/useHandTracking';
 import { JarvisPanel } from './JarvisPanel';
 import { Button } from '@/components/ui/button';
-import { Hand, Play, Square, TestTube } from 'lucide-react';
+import { Hand, Play, Square, TestTube, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export const HandTrackingInterface = () => {
@@ -14,7 +14,8 @@ export const HandTrackingInterface = () => {
     gestureState,
     logs,
     startHandTracking,
-    stopHandTracking
+    stopHandTracking,
+    error
   } = useHandTracking();
 
   const handleTestButtonClick = () => {
@@ -29,6 +30,14 @@ export const HandTrackingInterface = () => {
       className="h-full"
     >
       <div className="space-y-4">
+        {/* Error Display */}
+        {error && (
+          <div className="flex items-center space-x-2 p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
+            <AlertCircle className="h-4 w-4 text-destructive" />
+            <span className="text-sm text-destructive">{error}</span>
+          </div>
+        )}
+
         {/* Control Buttons */}
         <div className="flex items-center justify-between p-3 bg-gradient-panel rounded-lg border border-primary/10">
           <div className="flex items-center space-x-3">

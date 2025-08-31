@@ -187,13 +187,16 @@ export const useHandTracking = (): HandTrackingResult => {
       setIsLoading(true);
       addLog('Initializing hand tracking...');
       
+      // Wait a bit to ensure DOM elements are rendered
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      if (!videoRef.current || !canvasRef.current) {
+        throw new Error('Video or canvas element not found - please try again');
+      }
+      
       // Load MediaPipe Hands
       const { Hands } = await import('@mediapipe/hands');
       const { Camera } = await import('@mediapipe/camera_utils');
-      
-      if (!videoRef.current || !canvasRef.current) {
-        throw new Error('Video or canvas element not found');
-      }
       
       // Initialize Hands
       const hands = new Hands({
