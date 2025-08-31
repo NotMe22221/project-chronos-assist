@@ -24,7 +24,9 @@ export const HandTrackingInterface = () => {
     logs,
     startHandTracking,
     stopHandTracking,
-    error
+    error,
+    isMobile,
+    performanceMetrics
   } = useHandTracking();
 
   /**
@@ -55,7 +57,9 @@ export const HandTrackingInterface = () => {
         <div className="flex items-center justify-between p-3 bg-gradient-panel rounded-lg border border-primary/10">
           <div className="flex items-center space-x-3">
             <Hand className="h-5 w-5 text-primary" />
-            <span className="text-sm font-medium text-foreground text-enhanced">MediaPipe Hands</span>
+            <span className="text-sm font-medium text-foreground text-enhanced">
+              MediaPipe Hands {isMobile ? '📱' : '💻'}
+            </span>
           </div>
           <div className="flex items-center space-x-2">
             <div className={cn(
@@ -112,13 +116,14 @@ export const HandTrackingInterface = () => {
             playsInline
             muted
             autoPlay
+            webkit-playsinline="true"
           />
           
           {/* Canvas for displaying video + hand landmarks */}
           <canvas
             ref={canvasRef}
-            width={480}
-            height={360}
+            width={isMobile ? 320 : 480}
+            height={isMobile ? 240 : 360}
             className="w-full h-48 object-cover"
           />
           
@@ -191,11 +196,26 @@ export const HandTrackingInterface = () => {
           </div>
         </div>
 
+        {/* Performance Monitor (Mobile) */}
+        {isMobile && isActive && (
+          <div className="p-2 bg-muted/10 rounded border border-border/20">
+            <h4 className="text-xs font-medium text-foreground mb-1 text-enhanced">📊 Mobile Performance:</h4>
+            <div className="grid grid-cols-2 gap-2 text-xs text-foreground/90 text-enhanced">
+              <span>Processing: {performanceMetrics.frameProcessingTime.toFixed(1)}ms</span>
+              <span>Average: {performanceMetrics.averageProcessingTime.toFixed(1)}ms</span>
+              <span>Processed: {performanceMetrics.processedFrames}</span>
+              <span>Skipped: {performanceMetrics.skippedFrames}</span>
+            </div>
+          </div>
+        )}
+
         {/* Performance Tips */}
         <div className="p-2 bg-muted/10 rounded border border-border/20">
           <p className="text-xs text-muted-foreground text-enhanced">
-            💡 <strong>Tips:</strong> Ensure good lighting and hold your hand clearly in front of the camera. 
-            Gestures work best at arm's length from the camera.
+            💡 <strong>Tips:</strong> {isMobile 
+              ? 'Mobile optimizations active: Lower resolution, frame skipping enabled for smooth performance.' 
+              : 'Desktop mode: Full resolution with 15 FPS throttling for optimal performance.'
+            }
           </p>
         </div>
       </div>

@@ -6,6 +6,14 @@ interface GestureState {
   confidence: number;
 }
 
+// Performance monitoring interface
+interface PerformanceMetrics {
+  frameProcessingTime: number;
+  averageProcessingTime: number;
+  skippedFrames: number;
+  processedFrames: number;
+}
+
 // Return type for the hand tracking hook
 interface HandTrackingResult {
   videoRef: React.RefObject<HTMLVideoElement>;
@@ -19,17 +27,21 @@ interface HandTrackingResult {
   isInitialized: boolean;
   currentGesture: string;
   error: string | null;
+  isMobile: boolean;
+  performanceMetrics: PerformanceMetrics;
 }
 
 /**
- * Hand Tracking Hook using MediaPipe Hands
+ * Hand Tracking Hook using MediaPipe Hands (Mobile Optimized)
  * 
  * This hook implements:
- * - Real-time hand detection via webcam
+ * - Real-time hand detection via webcam with mobile optimizations
  * - Gesture recognition (fist, open hand, peace sign)
  * - Smooth page scrolling based on gestures
  * - Button clicking with cooldown mechanism
  * - Visual feedback with hand landmarks
+ * - Mobile device detection and adaptive performance settings
+ * - Frame processing optimization with performance monitoring
  */
 export const useHandTracking = (): HandTrackingResult => {
   // Refs for video and canvas elements
@@ -45,16 +57,80 @@ export const useHandTracking = (): HandTrackingResult => {
   const [currentGesture, setCurrentGesture] = useState('No gesture detected');
   const [error, setError] = useState<string | null>(null);
   
+  // Mobile detection and performance state
+  const [isMobile, setIsMobile] = useState(false);
+  const [performanceMetrics, setPerformanceMetrics] = useState<PerformanceMetrics>({
+    frameProcessingTime: 0,
+    averageProcessingTime: 0,
+    skippedFrames: 0,
+    processedFrames: 0
+  });
+  
   // Refs for MediaPipe and gesture tracking
   const handsRef = useRef<any>(null);
   const cameraRef = useRef<any>(null);
   const lastClickTimeRef = useRef<number>(0);
   const frameThrottleRef = useRef<number>(0);
   const lastGestureRef = useRef<string>('none');
+  const frameSkipCounterRef = useRef<number>(0);
+  const performanceTimesRef = useRef<number[]>([]);
+
+  // Mobile device detection on hook initialization
+  useEffect(() => {
+    const detectMobile = () => {
+      const userAgent = navigator.userAgent.toLowerCase();
+      const isMobileUA = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(userAgent);
+      const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+      const isSmallScreen = window.innerWidth <= 768;
+      
+      const mobile = isMobileUA || (isTouchDevice && isSmallScreen);
+      setIsMobile(mobile);
+      
+      if (mobile) {
+        addLog('📱 Mobile device detected - Optimized settings enabled');
+        console.log('🚀 [HandTracking] Mobile device detected, using optimized settings');
+      } else {
+        addLog('💻 Desktop device detected - Standard settings enabled');
+        console.log('🚀 [HandTracking] Desktop device detected, using standard settings');
+      }
+    };
+    
+    detectMobile();
+    window.addEventListener('resize', detectMobile);
+    return () => window.removeEventListener('resize', detectMobile);
+  }, []);
 
   /**
-   * Adds a timestamped log entry
+   * Updates performance metrics with frame processing times
    */
+  const updatePerformanceMetrics = useCallback((processingTime: number, skipped: boolean = false) => {
+    if (skipped) {
+      setPerformanceMetrics(prev => ({
+        ...prev,
+        skippedFrames: prev.skippedFrames + 1
+      }));
+      return;
+    }
+
+    performanceTimesRef.current.push(processingTime);
+    if (performanceTimesRef.current.length > 30) {
+      performanceTimesRef.current.shift(); // Keep only last 30 measurements
+    }
+
+    const avgTime = performanceTimesRef.current.reduce((a, b) => a + b, 0) / performanceTimesRef.current.length;
+    
+    setPerformanceMetrics(prev => ({
+      frameProcessingTime: processingTime,
+      averageProcessingTime: avgTime,
+      skippedFrames: prev.skippedFrames,
+      processedFrames: prev.processedFrames + 1
+    }));
+
+    // Log performance warnings for mobile devices
+    if (isMobile && avgTime > 50) {
+      console.warn(`⚠️ [HandTracking] High processing time on mobile: ${avgTime.toFixed(1)}ms average`);
+    }
+  }, [isMobile]);
   const addLog = useCallback((message: string) => {
     const timestamp = new Date().toLocaleTimeString();
     const logEntry = `[${timestamp}] ${message}`;
@@ -185,12 +261,26 @@ export const useHandTracking = (): HandTrackingResult => {
   }, [addLog]);
 
   /**
-   * Processes MediaPipe results and draws hand landmarks (optimized with throttling)
+   * Processes MediaPipe results and draws hand landmarks (mobile optimized with frame skipping)
    */
   const onResults = useCallback((results: any) => {
-    // Throttle frame processing to 15 FPS for better performance
+    const frameStartTime = performance.now();
+    
+    // Mobile optimization: Skip every 2nd frame to reduce processing load
+    if (isMobile) {
+      frameSkipCounterRef.current++;
+      if (frameSkipCounterRef.current % 2 === 0) {
+        updatePerformanceMetrics(0, true); // Log as skipped frame
+        return;
+      }
+    }
+    
+    // Desktop throttling: 15 FPS limit, Mobile: Natural limit through frame skipping
     const now = performance.now();
-    if (now - frameThrottleRef.current < 67) return; // ~15 FPS limit
+    if (!isMobile && now - frameThrottleRef.current < 67) {
+      updatePerformanceMetrics(0, true);
+      return;
+    }
     frameThrottleRef.current = now;
     if (!canvasRef.current || !videoRef.current) return;
     
@@ -276,12 +366,23 @@ export const useHandTracking = (): HandTrackingResult => {
         setCurrentGesture('No hand detected');
         setGestureState({ type: 'none', confidence: 0 });
       }
+      
+      // Calculate and log frame processing time
+      const processingTime = performance.now() - frameStartTime;
+      updatePerformanceMetrics(processingTime);
+      
+      // Mobile performance logging (less frequent to avoid spam)
+      if (isMobile && performanceMetrics.processedFrames % 30 === 0) {
+        console.log(`📊 [HandTracking Mobile] Average processing: ${performanceMetrics.averageProcessingTime.toFixed(1)}ms, Skipped: ${performanceMetrics.skippedFrames}`);
+      }
+      
     } catch (error) {
       console.error('Error in onResults:', error);
       setCurrentGesture('Rendering error');
       setGestureState({ type: 'none', confidence: 0 });
+      updatePerformanceMetrics(performance.now() - frameStartTime);
     }
-  }, [detectGesture, handleGesture]);
+  }, [detectGesture, handleGesture, isMobile, updatePerformanceMetrics, performanceMetrics]);
 
   /**
    * Initializes MediaPipe Hands and camera with comprehensive error handling
@@ -337,20 +438,34 @@ export const useHandTracking = (): HandTrackingResult => {
       }
       
       // Configure hand detection settings
-      hands.setOptions({
-        maxNumHands: 1, // Detect only one hand for simplicity
-        modelComplexity: 0, // Use lighter model for better performance
-        minDetectionConfidence: 0.6, // Lower threshold for smoother tracking
-        minTrackingConfidence: 0.4 // Lower threshold for smoother tracking
-      });
+      // Configure hand detection settings based on device type
+      const mobileSettings = {
+        maxNumHands: 1, // Always 1 hand for mobile performance
+        modelComplexity: 0, // Lite model for mobile
+        minDetectionConfidence: 0.5, // Lower for mobile responsiveness
+        minTrackingConfidence: 0.3 // Lower for mobile responsiveness
+      };
+      
+      const desktopSettings = {
+        maxNumHands: 1, // Keep 1 hand for consistency
+        modelComplexity: 0, // Use lite model for better performance
+        minDetectionConfidence: 0.6, // Slightly higher for desktop
+        minTrackingConfidence: 0.4 // Slightly higher for desktop  
+      };
+      
+      const settings = isMobile ? mobileSettings : desktopSettings;
+      hands.setOptions(settings);
+      
+      addLog(`🎯 Applied ${isMobile ? 'mobile' : 'desktop'} optimized settings`);
+      console.log(`🎯 [HandTracking] Applied settings:`, settings);
       
       hands.onResults(onResults);
       handsRef.current = hands;
       
       addLog('Initializing camera...');
       
-      // Initialize camera with frame processing using global Camera
-      const camera = new (window as any).Camera(videoRef.current, {
+      // Initialize camera with mobile-optimized settings
+      const cameraSettings = {
         onFrame: async () => {
           try {
             if (handsRef.current && videoRef.current && videoRef.current.readyState >= 2) {
@@ -360,9 +475,15 @@ export const useHandTracking = (): HandTrackingResult => {
             console.error('Error processing frame:', frameError);
           }
         },
-        width: 480, // Reduced resolution for better performance
-        height: 360
-      });
+        // Mobile-optimized resolution: 640x480 max, 480x360 for mobile
+        width: isMobile ? 320 : 480,
+        height: isMobile ? 240 : 360
+      };
+      
+      const camera = new (window as any).Camera(videoRef.current, cameraSettings);
+      
+      addLog(`📹 Camera initialized: ${cameraSettings.width}x${cameraSettings.height} ${isMobile ? '(mobile)' : '(desktop)'}`);
+      console.log(`📹 [HandTracking] Camera settings:`, cameraSettings);
       
       cameraRef.current = camera;
       
@@ -377,8 +498,8 @@ export const useHandTracking = (): HandTrackingResult => {
       setIsInitialized(true);
       setIsActive(true);
       setIsLoading(false);
-      addLog('Hand tracking initialized successfully');
-      console.log('Hand tracking initialized successfully');
+      addLog('✅ Hand tracking initialized successfully');
+      console.log(`✅ [HandTracking] Initialized successfully for ${isMobile ? 'mobile' : 'desktop'} device`);
       
     } catch (err) {
       console.error('Failed to initialize hand tracking:', err);
@@ -395,9 +516,9 @@ export const useHandTracking = (): HandTrackingResult => {
       
       setError(errorMessage);
       setIsLoading(false);
-      addLog(`Error: ${errorMessage}`);
+      addLog(`❌ Error: ${errorMessage}`);
     }
-  }, [onResults, addLog]);
+  }, [onResults, addLog, isMobile, updatePerformanceMetrics]);
 
   /**
    * Starts hand tracking (initializes if needed)
@@ -444,6 +565,8 @@ export const useHandTracking = (): HandTrackingResult => {
     stopHandTracking,
     isInitialized,
     currentGesture,
-    error
+    error,
+    isMobile,
+    performanceMetrics
   };
 };
