@@ -89,31 +89,31 @@ export const HandTrackingInterface = () => {
           Test Button (Use ✌️ Peace Sign to Click)
         </Button>
 
-        {/* Camera Feed */}
-        {isActive && (
-          <div className="relative bg-background/20 rounded-lg border border-border/30 overflow-hidden backdrop-blur-sm">
-            <video
-              ref={videoRef}
-              className="absolute inset-0 w-full h-48 object-cover opacity-0"
-              playsInline
-              muted
-            />
-            <canvas
-              ref={canvasRef}
-              width={640}
-              height={480}
-              className="w-full h-48 object-cover"
-            />
-            
-            {/* Gesture Indicator */}
+        {/* Camera Feed (always mounted so refs exist before init) */}
+        <div className="relative bg-background/20 rounded-lg border border-border/30 overflow-hidden backdrop-blur-sm">
+          <video
+            ref={videoRef}
+            className="absolute inset-0 w-full h-48 object-cover opacity-0"
+            playsInline
+            muted
+          />
+          <canvas
+            ref={canvasRef}
+            width={640}
+            height={480}
+            className="w-full h-48 object-cover"
+          />
+          
+          {/* Gesture Indicator */}
+          {isActive && (
             <div className="absolute top-2 left-2 px-2 py-1 bg-primary/80 rounded text-xs text-primary-foreground font-bold backdrop-blur-sm">
               {gestureState.type === 'fist' && '✊ Fist'}
               {gestureState.type === 'open' && '✋ Open'}
               {gestureState.type === 'peace' && '✌️ Peace'}
               {gestureState.type === 'none' && '🤚 No Gesture'}
             </div>
-          </div>
-        )}
+          )}
+        </div>
 
         {/* Gesture Instructions */}
         <div className="p-3 bg-muted/20 rounded-lg border border-border/30 backdrop-blur-sm">
