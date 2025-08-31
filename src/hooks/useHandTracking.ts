@@ -177,7 +177,7 @@ export const useHandTracking = () => {
     // Clear canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
-    // Draw video frame
+    // ALWAYS draw video frame first (this was the missing piece)
     ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
 
     if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
@@ -251,6 +251,9 @@ export const useHandTracking = () => {
       
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
+        await new Promise((resolve) => {
+          videoRef.current!.onloadedmetadata = resolve;
+        });
       }
 
       // Wait for MediaPipe to be available
