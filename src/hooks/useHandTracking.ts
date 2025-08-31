@@ -48,43 +48,66 @@ export const useHandTracking = (): HandTrackingResult => {
     
     let extendedCount = 0;
     
-    // Thumb (compare x coordinates, thumb tip vs thumb IP)
-    if (landmarks[4].x > landmarks[3].x) extendedCount++;
-    
-    // Other fingers (compare y coordinates, fingertip vs PIP)
-    const fingerTips = [8, 12, 16, 20]; // Index, Middle, Ring, Pinky
-    const fingerPIPs = [6, 10, 14, 18];
-    
-    for (let i = 0; i < fingerTips.length; i++) {
-      if (landmarks[fingerTips[i]].y < landmarks[fingerPIPs[i]].y) {
+    try {
+      // Thumb (compare x coordinates, thumb tip vs thumb IP)
+      if (landmarks[4]?.x !== undefined && landmarks[3]?.x !== undefined && 
+          landmarks[4].x > landmarks[3].x) {
         extendedCount++;
       }
+      
+      // Other fingers (compare y coordinates, fingertip vs PIP)
+      const fingerTips = [8, 12, 16, 20]; // Index, Middle, Ring, Pinky
+      const fingerPIPs = [6, 10, 14, 18];
+      
+      for (let i = 0; i < fingerTips.length; i++) {
+        const tipIndex = fingerTips[i];
+        const pipIndex = fingerPIPs[i];
+        
+        if (landmarks[tipIndex]?.y !== undefined && landmarks[pipIndex]?.y !== undefined &&
+            landmarks[tipIndex].y < landmarks[pipIndex].y) {
+          extendedCount++;
+        }
+      }
+    } catch (error) {
+      console.error('Error counting extended fingers:', error);
+      return 0;
     }
     
     return extendedCount;
   }, []);
 
   const detectGesture = useCallback((landmarks: any[]) => {
-    const extendedFingers = countExtendedFingers(landmarks);
+    if (!landmarks || landmarks.length < 21) return 'unknown';
     
-    switch (extendedFingers) {
-      case 0:
-        return 'fist';
-      case 2:
-        // Check if index and middle fingers are extended
-        const indexExtended = landmarks[8].y < landmarks[6].y;
-        const middleExtended = landmarks[12].y < landmarks[10].y;
-        const ringFolded = landmarks[16].y > landmarks[14].y;
-        const pinkyFolded = landmarks[20].y > landmarks[18].y;
-        
-        if (indexExtended && middleExtended && ringFolded && pinkyFolded) {
-          return 'peace';
-        }
-        return 'unknown';
-      case 5:
-        return 'open';
-      default:
-        return 'unknown';
+    try {
+      const extendedFingers = countExtendedFingers(landmarks);
+      
+      switch (extendedFingers) {
+        case 0:
+          return 'fist';
+        case 2:
+          // Check if index and middle fingers are extended (Peace sign)
+          const indexExtended = landmarks[8]?.y !== undefined && landmarks[6]?.y !== undefined && 
+                               landmarks[8].y < landmarks[6].y;
+          const middleExtended = landmarks[12]?.y !== undefined && landmarks[10]?.y !== undefined && 
+                                landmarks[12].y < landmarks[10].y;
+          const ringFolded = landmarks[16]?.y !== undefined && landmarks[14]?.y !== undefined && 
+                            landmarks[16].y > landmarks[14].y;
+          const pinkyFolded = landmarks[20]?.y !== undefined && landmarks[18]?.y !== undefined && 
+                             landmarks[20].y > landmarks[18].y;
+          
+          if (indexExtended && middleExtended && ringFolded && pinkyFolded) {
+            return 'peace';
+          }
+          return 'unknown';
+        case 5:
+          return 'open';
+        default:
+          return 'unknown';
+      }
+    } catch (error) {
+      console.error('Error detecting gesture:', error);
+      return 'unknown';
     }
   }, [countExtendedFingers]);
 
@@ -132,51 +155,84 @@ export const useHandTracking = (): HandTrackingResult => {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     
-    // Clear canvas and draw video frame
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-    
-    if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-      const landmarks = results.multiHandLandmarks[0];
+    try {
+      // Clear canvas and draw video frame
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
       
-      // Draw hand landmarks
-      ctx.fillStyle = '#FF0000';
-      ctx.strokeStyle = '#00FF00';
-      ctx.lineWidth = 2;
+      // Safely draw video frame
+      if (videoRef.current.readyState >= 2) {
+        ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+      }
       
-      // Draw landmarks
-      landmarks.forEach((landmark: any) => {
-        const x = landmark.x * canvas.width;
-        const y = landmark.y * canvas.height;
-        ctx.beginPath();
-        ctx.arc(x, y, 5, 0, 2 * Math.PI);
-        ctx.fill();
-      });
-      
-      // Draw connections
-      const connections = [
-        [0, 1], [1, 2], [2, 3], [3, 4], // Thumb
-        [0, 5], [5, 6], [6, 7], [7, 8], // Index
-        [0, 9], [9, 10], [10, 11], [11, 12], // Middle
-        [0, 13], [13, 14], [14, 15], [15, 16], // Ring
-        [0, 17], [17, 18], [18, 19], [19, 20], // Pinky
-        [5, 9], [9, 13], [13, 17] // Palm
-      ];
-      
-      connections.forEach(([start, end]) => {
-        const startPoint = landmarks[start];
-        const endPoint = landmarks[end];
-        ctx.beginPath();
-        ctx.moveTo(startPoint.x * canvas.width, startPoint.y * canvas.height);
-        ctx.lineTo(endPoint.x * canvas.width, endPoint.y * canvas.height);
-        ctx.stroke();
-      });
-      
-      // Detect and handle gesture
-      const gesture = detectGesture(landmarks);
-      handleGesture(gesture);
-    } else {
-      setCurrentGesture('No hand detected');
+      if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+        const landmarks = results.multiHandLandmarks[0];
+        
+        // Validate landmarks array
+        if (!landmarks || landmarks.length < 21) {
+          setCurrentGesture('Invalid hand data');
+          setGestureState({ type: 'none', confidence: 0 });
+          return;
+        }
+        
+        // Draw hand landmarks
+        ctx.fillStyle = '#FF0000';
+        ctx.strokeStyle = '#00FF00';
+        ctx.lineWidth = 2;
+        
+        // Draw landmarks with bounds checking
+        landmarks.forEach((landmark: any, index: number) => {
+          if (!landmark || typeof landmark.x !== 'number' || typeof landmark.y !== 'number') return;
+          
+          const x = Math.max(0, Math.min(landmark.x * canvas.width, canvas.width));
+          const y = Math.max(0, Math.min(landmark.y * canvas.height, canvas.height));
+          
+          ctx.beginPath();
+          ctx.arc(x, y, 5, 0, 2 * Math.PI);
+          ctx.fill();
+        });
+        
+        // Draw connections
+        const connections = [
+          [0, 1], [1, 2], [2, 3], [3, 4], // Thumb
+          [0, 5], [5, 6], [6, 7], [7, 8], // Index
+          [0, 9], [9, 10], [10, 11], [11, 12], // Middle
+          [0, 13], [13, 14], [14, 15], [15, 16], // Ring
+          [0, 17], [17, 18], [18, 19], [19, 20], // Pinky
+          [5, 9], [9, 13], [13, 17] // Palm
+        ];
+        
+        connections.forEach(([start, end]) => {
+          if (start >= landmarks.length || end >= landmarks.length) return;
+          
+          const startPoint = landmarks[start];
+          const endPoint = landmarks[end];
+          
+          if (!startPoint || !endPoint || 
+              typeof startPoint.x !== 'number' || typeof startPoint.y !== 'number' ||
+              typeof endPoint.x !== 'number' || typeof endPoint.y !== 'number') return;
+          
+          ctx.beginPath();
+          ctx.moveTo(
+            Math.max(0, Math.min(startPoint.x * canvas.width, canvas.width)), 
+            Math.max(0, Math.min(startPoint.y * canvas.height, canvas.height))
+          );
+          ctx.lineTo(
+            Math.max(0, Math.min(endPoint.x * canvas.width, canvas.width)), 
+            Math.max(0, Math.min(endPoint.y * canvas.height, canvas.height))
+          );
+          ctx.stroke();
+        });
+        
+        // Detect and handle gesture
+        const gesture = detectGesture(landmarks);
+        handleGesture(gesture);
+      } else {
+        setCurrentGesture('No hand detected');
+        setGestureState({ type: 'none', confidence: 0 });
+      }
+    } catch (error) {
+      console.error('Error in onResults:', error);
+      setCurrentGesture('Rendering error');
       setGestureState({ type: 'none', confidence: 0 });
     }
   }, [detectGesture, handleGesture]);
@@ -187,16 +243,29 @@ export const useHandTracking = (): HandTrackingResult => {
       setIsLoading(true);
       addLog('Initializing hand tracking...');
       
-      // Wait a bit to ensure DOM elements are rendered
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Wait longer to ensure DOM elements are rendered
+      await new Promise(resolve => setTimeout(resolve, 300));
       
       if (!videoRef.current || !canvasRef.current) {
-        throw new Error('Video or canvas element not found - please try again');
+        throw new Error('Video or canvas element not found - DOM elements not ready');
       }
       
-      // Load MediaPipe Hands
-      const { Hands } = await import('@mediapipe/hands');
-      const { Camera } = await import('@mediapipe/camera_utils');
+      // Check if camera is already accessible
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error('Camera access not supported in this browser');
+      }
+      
+      addLog('Loading MediaPipe libraries...');
+      
+      // Load MediaPipe Hands with error handling
+      const { Hands } = await import('@mediapipe/hands').catch(err => {
+        throw new Error('Failed to load MediaPipe Hands library');
+      });
+      const { Camera } = await import('@mediapipe/camera_utils').catch(err => {
+        throw new Error('Failed to load MediaPipe Camera utilities');
+      });
+      
+      addLog('MediaPipe libraries loaded successfully');
       
       // Initialize Hands
       const hands = new Hands({
@@ -215,11 +284,17 @@ export const useHandTracking = (): HandTrackingResult => {
       hands.onResults(onResults);
       handsRef.current = hands;
       
-      // Initialize camera
+      addLog('Initializing camera...');
+      
+      // Initialize camera with improved error handling
       const camera = new Camera(videoRef.current, {
         onFrame: async () => {
-          if (handsRef.current && videoRef.current) {
-            await handsRef.current.send({ image: videoRef.current });
+          try {
+            if (handsRef.current && videoRef.current && videoRef.current.readyState >= 2) {
+              await handsRef.current.send({ image: videoRef.current });
+            }
+          } catch (frameError) {
+            console.error('Error processing frame:', frameError);
           }
         },
         width: 640,
@@ -227,7 +302,14 @@ export const useHandTracking = (): HandTrackingResult => {
       });
       
       cameraRef.current = camera;
-      await camera.start();
+      
+      // Start camera with timeout
+      const cameraStartPromise = camera.start();
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Camera initialization timeout')), 10000)
+      );
+      
+      await Promise.race([cameraStartPromise, timeoutPromise]);
       
       setIsInitialized(true);
       setIsActive(true);
@@ -237,7 +319,17 @@ export const useHandTracking = (): HandTrackingResult => {
       
     } catch (err) {
       console.error('Failed to initialize hand tracking:', err);
-      const errorMessage = err instanceof Error ? err.message : 'Failed to initialize hand tracking';
+      let errorMessage = 'Failed to initialize hand tracking';
+      
+      if (err instanceof Error) {
+        errorMessage = err.message;
+        if (err.message.includes('Permission denied') || err.message.includes('NotAllowedError')) {
+          errorMessage = 'Camera permission denied. Please allow camera access and try again.';
+        } else if (err.message.includes('NotFoundError') || err.message.includes('No camera found')) {
+          errorMessage = 'No camera found. Please ensure a camera is connected.';
+        }
+      }
+      
       setError(errorMessage);
       setIsLoading(false);
       addLog(`Error: ${errorMessage}`);
