@@ -1,8 +1,20 @@
+
 import { useEffect, useRef, useState, useCallback } from 'react';
+
+interface GestureState {
+  type: 'fist' | 'open' | 'peace' | 'none';
+  confidence: number;
+}
 
 interface HandTrackingResult {
   videoRef: React.RefObject<HTMLVideoElement>;
   canvasRef: React.RefObject<HTMLCanvasElement>;
+  isActive: boolean;
+  isLoading: boolean;
+  gestureState: GestureState;
+  logs: string[];
+  startHandTracking: () => Promise<void>;
+  stopHandTracking: () => void;
   isInitialized: boolean;
   currentGesture: string;
   error: string | null;
@@ -12,6 +24,10 @@ interface HandTrackingResult {
 export const useHandTracking = (): HandTrackingResult => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [isActive, setIsActive] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [gestureState, setGestureState] = useState<GestureState>({ type: 'none', confidence: 0 });
+  const [logs, setLogs] = useState<string[]>([]);
   const [isInitialized, setIsInitialized] = useState(false);
   const [currentGesture, setCurrentGesture] = useState('No gesture detected');
   const [error, setError] = useState<string | null>(null);
@@ -20,6 +36,12 @@ export const useHandTracking = (): HandTrackingResult => {
   const handsRef = useRef<any>(null);
   const cameraRef = useRef<any>(null);
   const lastClickTimeRef = useRef<number>(0);
+
+  const addLog = useCallback((message: string) => {
+    const timestamp = new Date().toLocaleTimeString();
+    const logEntry = `[${timestamp}] ${message}`;
+    setLogs(prev => [...prev.slice(-4), logEntry]); // Keep only last 5 logs
+  }, []);
 
   const countExtendedFingers = useCallback((landmarks: any[]) => {
     if (!landmarks || landmarks.length < 21) return 0;
@@ -72,15 +94,21 @@ export const useHandTracking = (): HandTrackingResult => {
     switch (gesture) {
       case 'fist':
         setCurrentGesture('✊ Fist detected → Scroll UP');
+        setGestureState({ type: 'fist', confidence: 0.9 });
+        addLog('Fist gesture detected - Scrolling UP');
         window.scrollBy({ top: -50, behavior: 'smooth' });
         break;
       case 'open':
         setCurrentGesture('✋ Open hand detected → Scroll DOWN');
+        setGestureState({ type: 'open', confidence: 0.9 });
+        addLog('Open hand gesture detected - Scrolling DOWN');
         window.scrollBy({ top: 50, behavior: 'smooth' });
         break;
       case 'peace':
         if (now - lastClickTimeRef.current > 1000) {
           setCurrentGesture('✌️ Peace sign detected → CLICK');
+          setGestureState({ type: 'peace', confidence: 0.9 });
+          addLog('Peace sign gesture detected - Clicking test button');
           const testButton = document.querySelector('#hand-tracking-test-button') as HTMLButtonElement;
           if (testButton) {
             testButton.click();
@@ -88,12 +116,14 @@ export const useHandTracking = (): HandTrackingResult => {
           lastClickTimeRef.current = now;
         } else {
           setCurrentGesture('✌️ Peace sign detected → CLICK (cooldown)');
+          setGestureState({ type: 'peace', confidence: 0.5 });
         }
         break;
       default:
         setCurrentGesture('👋 Hand detected → No action');
+        setGestureState({ type: 'none', confidence: 0.3 });
     }
-  }, []);
+  }, [addLog]);
 
   const onResults = useCallback((results: any) => {
     if (!canvasRef.current || !videoRef.current) return;
@@ -147,12 +177,15 @@ export const useHandTracking = (): HandTrackingResult => {
       handleGesture(gesture);
     } else {
       setCurrentGesture('No hand detected');
+      setGestureState({ type: 'none', confidence: 0 });
     }
   }, [detectGesture, handleGesture]);
 
   const initializeHandTracking = useCallback(async () => {
     try {
       setError(null);
+      setIsLoading(true);
+      addLog('Initializing hand tracking...');
       
       // Load MediaPipe Hands
       const { Hands } = await import('@mediapipe/hands');
@@ -194,13 +227,38 @@ export const useHandTracking = (): HandTrackingResult => {
       await camera.start();
       
       setIsInitialized(true);
+      setIsActive(true);
+      setIsLoading(false);
+      addLog('Hand tracking initialized successfully');
       console.log('Hand tracking initialized successfully');
       
     } catch (err) {
       console.error('Failed to initialize hand tracking:', err);
-      setError(err instanceof Error ? err.message : 'Failed to initialize hand tracking');
+      const errorMessage = err instanceof Error ? err.message : 'Failed to initialize hand tracking';
+      setError(errorMessage);
+      setIsLoading(false);
+      addLog(`Error: ${errorMessage}`);
     }
-  }, [onResults]);
+  }, [onResults, addLog]);
+
+  const startHandTracking = useCallback(async () => {
+    if (!isInitialized) {
+      await initializeHandTracking();
+    } else if (cameraRef.current) {
+      await cameraRef.current.start();
+      setIsActive(true);
+      addLog('Hand tracking started');
+    }
+  }, [isInitialized, initializeHandTracking, addLog]);
+
+  const stopHandTracking = useCallback(() => {
+    if (cameraRef.current) {
+      cameraRef.current.stop();
+      setIsActive(false);
+      setGestureState({ type: 'none', confidence: 0 });
+      addLog('Hand tracking stopped');
+    }
+  }, [addLog]);
 
   useEffect(() => {
     return () => {
@@ -214,6 +272,12 @@ export const useHandTracking = (): HandTrackingResult => {
   return {
     videoRef,
     canvasRef,
+    isActive,
+    isLoading,
+    gestureState,
+    logs,
+    startHandTracking,
+    stopHandTracking,
     isInitialized,
     currentGesture,
     error,
