@@ -297,22 +297,45 @@ export const useHandTracking = (): HandTrackingResult => {
       
       addLog('Loading MediaPipe libraries...');
       
-      // Load MediaPipe Hands with error handling
-      const { Hands } = await import('@mediapipe/hands').catch(() => {
-        throw new Error('Failed to load MediaPipe Hands library');
-      });
-      const { Camera } = await import('@mediapipe/camera_utils').catch(() => {
-        throw new Error('Failed to load MediaPipe Camera utilities');
-      });
+      // Load MediaPipe Hands with proper import handling
+      let HandsModule, CameraModule;
+      try {
+        HandsModule = await import('@mediapipe/hands');
+        CameraModule = await import('@mediapipe/camera_utils');
+      } catch (importError) {
+        console.error('Import error:', importError);
+        throw new Error('Failed to load MediaPipe libraries');
+      }
+      
+      // Extract Hands constructor with fallback
+      const Hands = HandsModule.Hands || HandsModule.default?.Hands || HandsModule.default;
+      const Camera = CameraModule.Camera || CameraModule.default?.Camera || CameraModule.default;
+      
+      if (!Hands) {
+        console.error('HandsModule:', HandsModule);
+        throw new Error('Hands constructor not found in MediaPipe module');
+      }
+      
+      if (!Camera) {
+        console.error('CameraModule:', CameraModule);
+        throw new Error('Camera constructor not found in MediaPipe module');
+      }
       
       addLog('MediaPipe libraries loaded successfully');
       
-      // Initialize MediaPipe Hands
-      const hands = new Hands({
-        locateFile: (file: string) => {
-          return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
-        }
-      });
+      // Initialize MediaPipe Hands with better error handling
+      let hands;
+      try {
+        hands = new Hands({
+          locateFile: (file: string) => {
+            return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
+          }
+        });
+      } catch (constructorError) {
+        console.error('Hands constructor error:', constructorError);
+        console.error('Hands type:', typeof Hands);
+        throw new Error(`Failed to create Hands instance: ${constructorError.message}`);
+      }
       
       // Configure hand detection settings
       hands.setOptions({
