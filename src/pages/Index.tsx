@@ -2,7 +2,6 @@
 import { CommandCenter } from "@/components/CommandCenter";
 import { VoiceInterface } from "@/components/VoiceInterface";
 import { DataVisualization } from "@/components/DataVisualization";
-import { HandTrackingInterface } from "@/components/HandTrackingInterface";
 import { ScrollableContent } from "@/components/ScrollableContent";
 
 const Index = () => {
@@ -25,13 +24,8 @@ const Index = () => {
             <DataVisualization />
           </div>
           
-          {/* Hand Tracking Interface */}
-          <div className="lg:col-span-1">
-            <HandTrackingInterface />
-          </div>
-          
           {/* Scrollable Content for Testing */}
-          <div className="lg:col-span-1 xl:col-span-2">
+          <div className="lg:col-span-2 xl:col-span-3">
             <ScrollableContent />
           </div>
         </div>
