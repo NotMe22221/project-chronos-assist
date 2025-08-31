@@ -1,26 +1,18 @@
 
-import { Toaster } from "@/components/ui/toaster";
-import { Toaster as Sonner } from "@/components/ui/sonner";
-// Removed TooltipProvider to avoid hook dispatcher error from Radix Tooltip
-import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Index from "./pages/Index";
-import NotFound from "./pages/NotFound";
 
 const App = () => {
+  // Temporarily render the app without external providers/router to avoid
+  // duplicate-React hook dispatcher issues coming from node_modules.
+  // Once React is deduped in Vite config, we can reintroduce:
+  // - Toaster from "@/components/ui/toaster"
+  // - Sonner from "@/components/ui/sonner"
+  // - BrowserRouter/Routes/Route from "react-router-dom"
   return (
     <>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Index />} />
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </BrowserRouter>
+      <Index />
     </>
   );
 };
 
 export default App;
-
