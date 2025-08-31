@@ -12,35 +12,37 @@ export const useEyeTracking = () => {
   const { toast } = useToast();
 
   useEffect(() => {
-    // Load WebGazer script
-    const script = document.createElement('script');
-    script.src = 'https://webgazer.cs.brown.edu/webgazer.js';
-    script.async = true;
-    script.onload = () => {
-      console.log('WebGazer loaded successfully');
-    };
-    script.onerror = () => {
-      console.error('Failed to load WebGazer script');
-      toast({
-        title: "WebGazer Loading Failed",
-        description: "Could not load the eye tracking library. Please check your internet connection.",
-        variant: "destructive"
-      });
-    };
-    document.head.appendChild(script);
-
+    // Only load WebGazer when actually needed (lazy loading)
     return () => {
       if (eyeTracker.current) {
         eyeTracker.current.stop();
       }
     };
-  }, [toast]);
+  }, []);
 
   const startEyeTracking = async () => {
     if (isLoading) return;
     
     setIsLoading(true);
     try {
+      // Load WebGazer script only when needed
+      if (!window.webgazer) {
+        const script = document.createElement('script');
+        script.src = 'https://webgazer.cs.brown.edu/webgazer.js';
+        script.async = true;
+        
+        await new Promise<void>((resolve, reject) => {
+          script.onload = () => {
+            console.log('WebGazer loaded successfully');
+            resolve();
+          };
+          script.onerror = () => {
+            reject(new Error('Failed to load WebGazer script'));
+          };
+          document.head.appendChild(script);
+        });
+      }
+
       if (!eyeTracker.current) {
         eyeTracker.current = new EyeTracker();
       }

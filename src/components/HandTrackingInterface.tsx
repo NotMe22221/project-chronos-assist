@@ -117,8 +117,8 @@ export const HandTrackingInterface = () => {
           {/* Canvas for displaying video + hand landmarks */}
           <canvas
             ref={canvasRef}
-            width={640}
-            height={480}
+            width={480}
+            height={360}
             className="w-full h-48 object-cover"
           />
           

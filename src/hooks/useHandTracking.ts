@@ -49,6 +49,8 @@ export const useHandTracking = (): HandTrackingResult => {
   const handsRef = useRef<any>(null);
   const cameraRef = useRef<any>(null);
   const lastClickTimeRef = useRef<number>(0);
+  const frameThrottleRef = useRef<number>(0);
+  const lastGestureRef = useRef<string>('none');
 
   /**
    * Adds a timestamped log entry
@@ -183,9 +185,13 @@ export const useHandTracking = (): HandTrackingResult => {
   }, [addLog]);
 
   /**
-   * Processes MediaPipe results and draws hand landmarks
+   * Processes MediaPipe results and draws hand landmarks (optimized with throttling)
    */
   const onResults = useCallback((results: any) => {
+    // Throttle frame processing to 15 FPS for better performance
+    const now = performance.now();
+    if (now - frameThrottleRef.current < 67) return; // ~15 FPS limit
+    frameThrottleRef.current = now;
     if (!canvasRef.current || !videoRef.current) return;
     
     const canvas = canvasRef.current;
@@ -260,9 +266,12 @@ export const useHandTracking = (): HandTrackingResult => {
           ctx.stroke();
         });
         
-        // Detect and handle gesture
+        // Detect and handle gesture (only if changed to reduce processing)
         const gesture = detectGesture(landmarks);
-        handleGesture(gesture);
+        if (gesture !== lastGestureRef.current) {
+          handleGesture(gesture);
+          lastGestureRef.current = gesture;
+        }
       } else {
         setCurrentGesture('No hand detected');
         setGestureState({ type: 'none', confidence: 0 });
@@ -330,9 +339,9 @@ export const useHandTracking = (): HandTrackingResult => {
       // Configure hand detection settings
       hands.setOptions({
         maxNumHands: 1, // Detect only one hand for simplicity
-        modelComplexity: 1, // Balance between accuracy and performance
-        minDetectionConfidence: 0.7, // Threshold for hand detection
-        minTrackingConfidence: 0.5 // Threshold for hand tracking
+        modelComplexity: 0, // Use lighter model for better performance
+        minDetectionConfidence: 0.6, // Lower threshold for smoother tracking
+        minTrackingConfidence: 0.4 // Lower threshold for smoother tracking
       });
       
       hands.onResults(onResults);
@@ -351,8 +360,8 @@ export const useHandTracking = (): HandTrackingResult => {
             console.error('Error processing frame:', frameError);
           }
         },
-        width: 640,
-        height: 480
+        width: 480, // Reduced resolution for better performance
+        height: 360
       });
       
       cameraRef.current = camera;
