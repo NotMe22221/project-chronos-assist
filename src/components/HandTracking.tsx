@@ -1,7 +1,7 @@
 
 import { useState } from 'react';
 import { JarvisPanel } from './JarvisPanel';
-import { Hand, Play, Square, Gesture } from 'lucide-react';
+import { Hand, Play, Square } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useHandTracking } from '@/hooks/useHandTracking';
 import { cn } from '@/lib/utils';
@@ -153,7 +153,7 @@ export const HandTracking = () => {
               "bg-gradient-to-r from-primary to-secondary hover:from-primary/90 hover:to-secondary/90"
             )}
           >
-            <Gesture className="w-4 h-4 mr-2" />
+            <Hand className="w-4 h-4 mr-2" />
             Test Button (Clicked {testClicks} times)
           </Button>
           <p className="text-xs text-muted-foreground mt-2">
