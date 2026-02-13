@@ -2,8 +2,15 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 
 // Interface for gesture state management
 interface GestureState {
-  type: 'fist' | 'open' | 'peace' | 'none';
+  type: 'fist' | 'open' | 'peace' | 'pointing' | 'none';
   confidence: number;
+}
+
+// Cursor position for pointing gesture
+interface CursorPosition {
+  x: number;
+  y: number;
+  visible: boolean;
 }
 
 // Performance monitoring interface
@@ -21,6 +28,7 @@ interface HandTrackingResult {
   isActive: boolean;
   isLoading: boolean;
   gestureState: GestureState;
+  cursorPosition: CursorPosition;
   logs: string[];
   startHandTracking: () => Promise<void>;
   stopHandTracking: () => void;
@@ -56,6 +64,7 @@ export const useHandTracking = (): HandTrackingResult => {
   const [isInitialized, setIsInitialized] = useState(false);
   const [currentGesture, setCurrentGesture] = useState('No gesture detected');
   const [error, setError] = useState<string | null>(null);
+  const [cursorPosition, setCursorPosition] = useState<CursorPosition>({ x: 0, y: 0, visible: false });
   
   // Mobile detection and performance state
   const [isMobile, setIsMobile] = useState(false);
@@ -186,6 +195,17 @@ export const useHandTracking = (): HandTrackingResult => {
       switch (extendedFingers) {
         case 0:
           return 'fist'; // Closed fist - scroll up
+        case 1: {
+          // Check if only index finger is extended (pointing gesture)
+          const indexUp = landmarks[8]?.y !== undefined && landmarks[6]?.y !== undefined && 
+                         landmarks[8].y < landmarks[6].y;
+          const middleFolded = landmarks[12]?.y !== undefined && landmarks[10]?.y !== undefined && 
+                              landmarks[12].y > landmarks[10].y;
+          if (indexUp && middleFolded) {
+            return 'pointing'; // Pointing - cursor mode
+          }
+          return 'unknown';
+        }
         case 2:
           // Check if it's specifically index and middle fingers (peace sign)
           const indexExtended = landmarks[8]?.y !== undefined && landmarks[6]?.y !== undefined && 
@@ -215,34 +235,43 @@ export const useHandTracking = (): HandTrackingResult => {
   /**
    * Handles gesture actions with cooldown mechanism for clicks
    */
-  const handleGesture = useCallback((gesture: string) => {
+  const handleGesture = useCallback((gesture: string, landmarks?: any[]) => {
     const now = Date.now();
     
     switch (gesture) {
       case 'fist':
+        setCursorPosition(prev => ({ ...prev, visible: false }));
         setCurrentGesture('✊ Fist detected → Scroll UP');
         setGestureState({ type: 'fist', confidence: 0.9 });
         addLog('Fist gesture detected - Scrolling UP');
-        // Smooth scroll up by 50px
         window.scrollBy({ top: -50, behavior: 'smooth' });
         break;
         
       case 'open':
+        setCursorPosition(prev => ({ ...prev, visible: false }));
         setCurrentGesture('✋ Open hand detected → Scroll DOWN');
         setGestureState({ type: 'open', confidence: 0.9 });
         addLog('Open hand gesture detected - Scrolling DOWN');
-        // Smooth scroll down by 50px
         window.scrollBy({ top: 50, behavior: 'smooth' });
+        break;
+
+      case 'pointing':
+        if (landmarks && landmarks[8]) {
+          // Map fingertip position to screen coordinates
+          const screenX = (1 - landmarks[8].x) * window.innerWidth; // Mirror X
+          const screenY = landmarks[8].y * window.innerHeight;
+          setCursorPosition({ x: screenX, y: screenY, visible: true });
+        }
+        setCurrentGesture('☝️ Pointing → Cursor Mode');
+        setGestureState({ type: 'pointing', confidence: 0.9 });
         break;
         
       case 'peace':
-        // Implement 1-second cooldown for click gesture
+        setCursorPosition(prev => ({ ...prev, visible: false }));
         if (now - lastClickTimeRef.current > 1000) {
           setCurrentGesture('✌️ Peace sign detected → CLICK');
           setGestureState({ type: 'peace', confidence: 0.9 });
           addLog('Peace sign gesture detected - Clicking test button');
-          
-          // Find and click the designated test button
           const testButton = document.querySelector('#hand-tracking-test-button') as HTMLButtonElement;
           if (testButton) {
             testButton.click();
@@ -255,6 +284,7 @@ export const useHandTracking = (): HandTrackingResult => {
         break;
         
       default:
+        setCursorPosition(prev => ({ ...prev, visible: false }));
         setCurrentGesture('👋 Hand detected → No action');
         setGestureState({ type: 'none', confidence: 0 });
     }
@@ -356,13 +386,17 @@ export const useHandTracking = (): HandTrackingResult => {
           ctx.stroke();
         });
         
-        // Detect and handle gesture (only if changed to reduce processing)
+        // Detect and handle gesture
         const gesture = detectGesture(landmarks);
-        if (gesture !== lastGestureRef.current) {
+        // For pointing, always update cursor even if gesture hasn't changed
+        if (gesture === 'pointing') {
+          handleGesture(gesture, landmarks);
+        } else if (gesture !== lastGestureRef.current) {
           handleGesture(gesture);
-          lastGestureRef.current = gesture;
         }
+        lastGestureRef.current = gesture;
       } else {
+        setCursorPosition(prev => ({ ...prev, visible: false }));
         setCurrentGesture('No hand detected');
         setGestureState({ type: 'none', confidence: 0 });
       }
@@ -560,6 +594,7 @@ export const useHandTracking = (): HandTrackingResult => {
     isActive,
     isLoading,
     gestureState,
+    cursorPosition,
     logs,
     startHandTracking,
     stopHandTracking,

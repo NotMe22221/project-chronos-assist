@@ -21,6 +21,7 @@ export const HandTrackingInterface = () => {
     isActive,
     isLoading,
     gestureState,
+    cursorPosition,
     logs,
     startHandTracking,
     stopHandTracking,
@@ -38,7 +39,22 @@ export const HandTrackingInterface = () => {
   };
 
   return (
-    <JarvisPanel 
+    <>
+      {/* Floating Cursor Overlay */}
+      {cursorPosition.visible && (
+        <div
+          className="fixed z-[9999] pointer-events-none"
+          style={{
+            left: cursorPosition.x - 12,
+            top: cursorPosition.y - 12,
+            transition: 'left 0.08s linear, top 0.08s linear',
+          }}
+        >
+          <div className="w-6 h-6 rounded-full bg-primary/80 border-2 border-primary-foreground shadow-lg shadow-primary/40 animate-pulse" />
+          <div className="w-2 h-2 rounded-full bg-primary-foreground absolute top-2 left-2" />
+        </div>
+      )}
+    <JarvisPanel
       title="Hand Gesture Control" 
       glow={isActive} 
       pulse={gestureState.type !== 'none'}
@@ -143,6 +159,7 @@ export const HandTrackingInterface = () => {
               {gestureState.type === 'fist' && '✊ Fist → Scroll UP'}
               {gestureState.type === 'open' && '✋ Open → Scroll DOWN'}
               {gestureState.type === 'peace' && '✌️ Peace → CLICK'}
+              {gestureState.type === 'pointing' && '☝️ Pointing → Cursor'}
               {gestureState.type === 'none' && '🤚 No Gesture'}
             </div>
           )}
@@ -173,6 +190,10 @@ export const HandTrackingInterface = () => {
             <div className="flex items-center justify-between">
               <span>✌️ <strong>Peace Sign (2 fingers)</strong></span>
               <span className="text-primary">→ Click Button</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span>☝️ <strong>Pointing (1 finger)</strong></span>
+              <span className="text-primary">→ Move Cursor</span>
             </div>
             <div className="text-xs text-muted-foreground mt-2 italic">
               * Click gesture has 1-second cooldown
@@ -220,5 +241,6 @@ export const HandTrackingInterface = () => {
         </div>
       </div>
     </JarvisPanel>
+    </>
   );
 };
