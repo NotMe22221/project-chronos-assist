@@ -267,15 +267,22 @@ export const useHandTracking = (): HandTrackingResult => {
         break;
         
       case 'peace':
-        setCursorPosition(prev => ({ ...prev, visible: false }));
+        // Keep cursor visible at last known position for accurate clicking
         if (now - lastClickTimeRef.current > 1000) {
           setCurrentGesture('✌️ Peace sign detected → CLICK');
           setGestureState({ type: 'peace', confidence: 0.9 });
-          addLog('Peace sign gesture detected - Clicking test button');
-          const testButton = document.querySelector('#hand-tracking-test-button') as HTMLButtonElement;
-          if (testButton) {
-            testButton.click();
-          }
+          addLog('Peace sign gesture detected - Clicking element under cursor');
+          // Click the element under the cursor's last known position
+          setCursorPosition(prev => {
+            if (prev.visible) {
+              const el = document.elementFromPoint(prev.x, prev.y) as HTMLElement;
+              if (el) {
+                el.click();
+                addLog(`Clicked element: <${el.tagName.toLowerCase()}>`);
+              }
+            }
+            return prev; // Keep cursor as-is
+          });
           lastClickTimeRef.current = now;
         } else {
           setCurrentGesture('✌️ Peace sign detected → CLICK (cooldown)');
