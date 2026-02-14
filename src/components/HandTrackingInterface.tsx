@@ -47,7 +47,7 @@ export const HandTrackingInterface = () => {
           style={{
             left: cursorPosition.x - 12,
             top: cursorPosition.y - 12,
-            transition: 'left 0.08s linear, top 0.08s linear',
+            transition: 'left 0.12s ease-out, top 0.12s ease-out',
           }}
         >
           <div className="w-6 h-6 rounded-full bg-primary/80 border-2 border-primary-foreground shadow-lg shadow-primary/40 animate-pulse" />
