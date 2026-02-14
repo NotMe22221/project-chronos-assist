@@ -54,6 +54,7 @@ const FINGER_PIPS = [6, 10, 14, 18];
 
 /**
  * Hand Tracking Hook using MediaPipe Hands (Performance Optimized)
+ * @version 2
  */
 export const useHandTracking = (): HandTrackingResult => {
   const videoRef = useRef<HTMLVideoElement>(null);
