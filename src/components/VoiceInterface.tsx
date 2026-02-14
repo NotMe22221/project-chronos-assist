@@ -1,13 +1,15 @@
 
-import { Mic, Square, Volume2, VolumeX, Phone, PhoneOff } from 'lucide-react';
+import { Mic, Square, Volume2, VolumeX, Phone, PhoneOff, Power } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { JarvisPanel } from './JarvisPanel';
 import { useElevenLabsConversation } from '@/hooks/useElevenLabsConversation';
 import { cn } from '@/lib/utils';
 import { Slider } from '@/components/ui/slider';
 import { useState } from 'react';
+import { useFeatureToggle } from '@/contexts/FeatureToggleContext';
 
 export const VoiceInterface = () => {
+  const { features, toggleFeature } = useFeatureToggle();
   const {
     isConnected,
     isSpeaking,
@@ -97,8 +99,9 @@ export const VoiceInterface = () => {
           </p>
         </div>
 
-        <div className="text-center">
-          <div className="flex items-center justify-center space-x-2">
+        {/* Feature Toggle Indicators */}
+        <div className="flex items-center justify-between p-2 bg-muted/10 rounded border border-border/20">
+          <div className="flex items-center space-x-2">
             <div className={cn(
               "w-2 h-2 rounded-full",
               isConnected ? "bg-primary animate-pulse" : "bg-muted"
@@ -107,6 +110,18 @@ export const VoiceInterface = () => {
               {isConnected ? "CONNECTED" : "DISCONNECTED"}
             </span>
           </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => toggleFeature('voiceResponses')}
+            className={cn(
+              "h-7 px-2 text-xs",
+              features.voiceResponses ? "text-success" : "text-destructive"
+            )}
+          >
+            <Power className="h-3 w-3 mr-1" />
+            Voice {features.voiceResponses ? 'ON' : 'MUTED'}
+          </Button>
         </div>
       </div>
     </JarvisPanel>

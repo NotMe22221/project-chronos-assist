@@ -1,7 +1,8 @@
 
 import { useConversation } from '@11labs/react';
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
+import { useFeatureToggle } from '@/contexts/FeatureToggleContext';
 
 interface ConversationMessage {
   id: string;
@@ -24,6 +25,7 @@ export const useElevenLabsConversation = () => {
   const [isConnected, setIsConnected] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const { toast } = useToast();
+  const { processVoiceCommand, features } = useFeatureToggle();
 
   const conversation = useConversation({
     onConnect: () => {
@@ -63,6 +65,14 @@ export const useElevenLabsConversation = () => {
         
         // Only add non-empty messages
         if (messageText.trim()) {
+          // Check for voice commands from user messages
+          if (messageType === 'user') {
+            const wasCommand = processVoiceCommand(messageText);
+            if (wasCommand) {
+              console.log(`🎤 Voice command processed: "${messageText}"`);
+            }
+          }
+
           const newMessage: ConversationMessage = {
             id: Date.now().toString(),
             text: messageText,
@@ -125,13 +135,25 @@ export const useElevenLabsConversation = () => {
     }
   }, [conversation]);
 
+  // Mute/unmute voice output when toggle changes
+  useEffect(() => {
+    if (isConnected) {
+      try {
+        conversation.setVolume({ volume: features.voiceResponses ? 1 : 0 });
+      } catch (e) {
+        console.error('Failed to update volume for voice toggle:', e);
+      }
+    }
+  }, [features.voiceResponses, isConnected, conversation]);
+
   const setVolume = useCallback(async (volume: number) => {
+    if (!features.voiceResponses) return; // Don't override mute
     try {
       await conversation.setVolume({ volume: Math.max(0, Math.min(1, volume)) });
     } catch (error) {
       console.error('Failed to set volume:', error);
     }
-  }, [conversation]);
+  }, [conversation, features.voiceResponses]);
 
   return {
     messages,
