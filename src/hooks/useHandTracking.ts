@@ -83,6 +83,7 @@ export const useHandTracking = (): HandTrackingResult => {
   const lastGestureRef = useRef<string>('none');
   const frameSkipCounterRef = useRef<number>(0);
   const performanceTimesRef = useRef<number[]>([]);
+  const smoothCursorRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
 
   // Mobile device detection on hook initialization
   useEffect(() => {
@@ -256,9 +257,36 @@ export const useHandTracking = (): HandTrackingResult => {
       case 'pointing':
         if (landmarks && landmarks[8]) {
           // Map fingertip position to screen coordinates
-          const screenX = (1 - landmarks[8].x) * window.innerWidth; // Mirror X
-          const screenY = landmarks[8].y * window.innerHeight;
-          setCursorPosition({ x: screenX, y: screenY, visible: true });
+          const rawX = (1 - landmarks[8].x) * window.innerWidth;
+          const rawY = landmarks[8].y * window.innerHeight;
+
+          // Exponential smoothing to reduce jitter (lower = smoother)
+          const smoothing = 0.25;
+          const prev = smoothCursorRef.current;
+          const smoothX = prev.x + (rawX - prev.x) * smoothing;
+          const smoothY = prev.y + (rawY - prev.y) * smoothing;
+          smoothCursorRef.current = { x: smoothX, y: smoothY };
+
+          // Snap-to interactive element if cursor is close
+          let finalX = smoothX;
+          let finalY = smoothY;
+          const snapRadius = 30;
+          const elUnder = document.elementFromPoint(smoothX, smoothY);
+          if (elUnder) {
+            const interactive = elUnder.closest('button, a, [role="button"], input, select, textarea, [tabindex]');
+            if (interactive) {
+              const rect = interactive.getBoundingClientRect();
+              const cx = rect.left + rect.width / 2;
+              const cy = rect.top + rect.height / 2;
+              const dist = Math.hypot(smoothX - cx, smoothY - cy);
+              if (dist < snapRadius + Math.max(rect.width, rect.height) / 2) {
+                finalX = cx;
+                finalY = cy;
+              }
+            }
+          }
+
+          setCursorPosition({ x: finalX, y: finalY, visible: true });
         }
         setCurrentGesture('☝️ Pointing → Cursor Mode');
         setGestureState({ type: 'pointing', confidence: 0.9 });
