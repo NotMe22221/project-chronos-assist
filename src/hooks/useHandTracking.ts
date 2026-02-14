@@ -240,7 +240,6 @@ export const useHandTracking = (): HandTrackingResult => {
     
     switch (gesture) {
       case 'fist':
-        setCursorPosition(prev => ({ ...prev, visible: false }));
         setCurrentGesture('✊ Fist detected → Scroll UP');
         setGestureState({ type: 'fist', confidence: 0.9 });
         addLog('Fist gesture detected - Scrolling UP');
@@ -248,7 +247,6 @@ export const useHandTracking = (): HandTrackingResult => {
         break;
         
       case 'open':
-        setCursorPosition(prev => ({ ...prev, visible: false }));
         setCurrentGesture('✋ Open hand detected → Scroll DOWN');
         setGestureState({ type: 'open', confidence: 0.9 });
         addLog('Open hand gesture detected - Scrolling DOWN');
@@ -291,7 +289,6 @@ export const useHandTracking = (): HandTrackingResult => {
         break;
         
       default:
-        setCursorPosition(prev => ({ ...prev, visible: false }));
         setCurrentGesture('👋 Hand detected → No action');
         setGestureState({ type: 'none', confidence: 0 });
     }
@@ -403,6 +400,7 @@ export const useHandTracking = (): HandTrackingResult => {
         }
         lastGestureRef.current = gesture;
       } else {
+        // Keep cursor visible - only hide when hand is completely gone for a while
         setCursorPosition(prev => ({ ...prev, visible: false }));
         setCurrentGesture('No hand detected');
         setGestureState({ type: 'none', confidence: 0 });
