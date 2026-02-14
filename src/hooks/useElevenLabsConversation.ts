@@ -27,9 +27,10 @@ export const useElevenLabsConversation = () => {
   const { toast } = useToast();
   const { processVoiceCommand, features } = useFeatureToggle();
 
-  // Ref to always read latest feature state inside closures
+  // Refs to always read latest state inside closures
   const featuresRef = useRef(features);
   featuresRef.current = features;
+  const prevVoiceRef = useRef(features.voiceResponses);
 
   const conversation = useConversation({
     clientTools: {
@@ -177,8 +178,7 @@ export const useElevenLabsConversation = () => {
     }
   }, [conversation]);
 
-  // Track previous voiceResponses value to only adjust volume on actual toggle changes
-  const prevVoiceRef = useRef(features.voiceResponses);
+  // Mute/unmute voice output only on actual toggle changes
   useEffect(() => {
     if (isConnected && prevVoiceRef.current !== features.voiceResponses) {
       prevVoiceRef.current = features.voiceResponses;
