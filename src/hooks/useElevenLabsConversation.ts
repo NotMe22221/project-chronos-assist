@@ -1,6 +1,6 @@
 
 import { useConversation } from '@11labs/react';
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { useFeatureToggle } from '@/contexts/FeatureToggleContext';
 
@@ -27,10 +27,15 @@ export const useElevenLabsConversation = () => {
   const { toast } = useToast();
   const { processVoiceCommand, features } = useFeatureToggle();
 
+  // Ref to always read latest feature state inside closures
+  const featuresRef = useRef(features);
+  featuresRef.current = features;
+
   const conversation = useConversation({
     clientTools: {
       enableHandTracking: () => {
-        if (features.handTracking) {
+        const current = featuresRef.current;
+        if (current.handTracking) {
           console.log('🛠️ Client tool: hand tracking already enabled');
           return 'Hand tracking is already enabled.';
         }
@@ -39,7 +44,8 @@ export const useElevenLabsConversation = () => {
         return 'Hand tracking enabled.';
       },
       disableHandTracking: () => {
-        if (!features.handTracking) {
+        const current = featuresRef.current;
+        if (!current.handTracking) {
           console.log('🛠️ Client tool: hand tracking already disabled');
           return 'Hand tracking is already disabled.';
         }
@@ -48,7 +54,8 @@ export const useElevenLabsConversation = () => {
         return 'Hand tracking disabled.';
       },
       enableVoice: () => {
-        if (features.voiceResponses) {
+        const current = featuresRef.current;
+        if (current.voiceResponses) {
           console.log('🛠️ Client tool: voice already enabled');
           return 'Voice responses are already enabled.';
         }
@@ -57,7 +64,8 @@ export const useElevenLabsConversation = () => {
         return 'Voice responses enabled.';
       },
       disableVoice: () => {
-        if (!features.voiceResponses) {
+        const current = featuresRef.current;
+        if (!current.voiceResponses) {
           console.log('🛠️ Client tool: voice already disabled');
           return 'Voice responses are already disabled.';
         }
