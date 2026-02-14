@@ -28,6 +28,28 @@ export const useElevenLabsConversation = () => {
   const { processVoiceCommand, features } = useFeatureToggle();
 
   const conversation = useConversation({
+    clientTools: {
+      enableHandTracking: () => {
+        console.log('🛠️ Client tool: enableHandTracking');
+        processVoiceCommand('start hand tracking');
+        return 'Hand tracking enabled.';
+      },
+      disableHandTracking: () => {
+        console.log('🛠️ Client tool: disableHandTracking');
+        processVoiceCommand('stop hand tracking');
+        return 'Hand tracking disabled.';
+      },
+      enableVoice: () => {
+        console.log('🛠️ Client tool: enableVoice');
+        processVoiceCommand('start talking');
+        return 'Voice responses enabled.';
+      },
+      disableVoice: () => {
+        console.log('🛠️ Client tool: disableVoice');
+        processVoiceCommand('stop talking');
+        return 'Voice responses disabled.';
+      },
+    },
     onConnect: () => {
       console.log('ElevenLabs conversation connected');
       setIsConnected(true);
@@ -44,12 +66,10 @@ export const useElevenLabsConversation = () => {
     onMessage: (message) => {
       console.log('Message received:', message);
       
-      // Handle different message types based on the actual ElevenLabs API structure
       if (message && typeof message === 'object') {
         let messageText = '';
         let messageType: 'user' | 'ai' = 'ai';
         
-        // Handle the message based on its structure
         if ('message' in message && typeof message.message === 'string') {
           messageText = message.message;
         } else if ('text' in message && typeof message.text === 'string') {
@@ -58,18 +78,16 @@ export const useElevenLabsConversation = () => {
           messageText = message;
         }
         
-        // Determine message type based on source
         if ('source' in message) {
           messageType = message.source === 'user' ? 'user' : 'ai';
         }
         
-        // Only add non-empty messages
         if (messageText.trim()) {
-          // Check for voice commands from user messages
+          // Regex fallback for command detection on user transcripts
           if (messageType === 'user') {
             const wasCommand = processVoiceCommand(messageText);
             if (wasCommand) {
-              console.log(`🎤 Voice command processed: "${messageText}"`);
+              console.log(`🎤 Voice command (regex fallback): "${messageText}"`);
             }
           }
 
