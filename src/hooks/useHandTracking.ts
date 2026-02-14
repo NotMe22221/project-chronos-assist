@@ -120,32 +120,27 @@ export const useHandTracking = (): HandTrackingResult => {
    */
   const updatePerformanceMetrics = useCallback((processingTime: number, skipped: boolean = false) => {
     if (skipped) {
-      setPerformanceMetrics(prev => ({
-        ...prev,
-        skippedFrames: prev.skippedFrames + 1
-      }));
+      // Use ref to avoid re-render on every skipped frame
       return;
     }
 
     performanceTimesRef.current.push(processingTime);
     if (performanceTimesRef.current.length > 30) {
-      performanceTimesRef.current.shift(); // Keep only last 30 measurements
+      performanceTimesRef.current.shift();
     }
 
-    const avgTime = performanceTimesRef.current.reduce((a, b) => a + b, 0) / performanceTimesRef.current.length;
-    
-    setPerformanceMetrics(prev => ({
-      frameProcessingTime: processingTime,
-      averageProcessingTime: avgTime,
-      skippedFrames: prev.skippedFrames,
-      processedFrames: prev.processedFrames + 1
-    }));
-
-    // Log performance warnings for mobile devices
-    if (isMobile && avgTime > 50) {
-      console.warn(`⚠️ [HandTracking] High processing time on mobile: ${avgTime.toFixed(1)}ms average`);
+    // Only update state every 30 frames to reduce re-renders
+    const count = performanceTimesRef.current.length;
+    if (count % 30 === 0) {
+      const avgTime = performanceTimesRef.current.reduce((a, b) => a + b, 0) / count;
+      setPerformanceMetrics({
+        frameProcessingTime: processingTime,
+        averageProcessingTime: avgTime,
+        skippedFrames: 0,
+        processedFrames: count
+      });
     }
-  }, [isMobile]);
+  }, []);
   const addLog = useCallback((message: string) => {
     const timestamp = new Date().toLocaleTimeString();
     const logEntry = `[${timestamp}] ${message}`;
@@ -277,9 +272,9 @@ export const useHandTracking = (): HandTrackingResult => {
           const rawX = (1 - landmarks[8].x) * window.innerWidth;
           const rawY = landmarks[8].y * window.innerHeight;
 
-          // Exponential smoothing to reduce jitter (lower = smoother)
-          const smoothing = 0.25;
           const prev = smoothCursorRef.current;
+          const rawDist = Math.hypot(rawX - prev.x, rawY - prev.y);
+          const smoothing = rawDist > 80 ? 0.5 : rawDist > 30 ? 0.35 : 0.2;
           const smoothX = prev.x + (rawX - prev.x) * smoothing;
           const smoothY = prev.y + (rawY - prev.y) * smoothing;
           smoothCursorRef.current = { x: smoothX, y: smoothY };
@@ -345,19 +340,17 @@ export const useHandTracking = (): HandTrackingResult => {
   const onResults = useCallback((results: any) => {
     const frameStartTime = performance.now();
     
-    // Mobile optimization: Skip every 2nd frame to reduce processing load
+    // Mobile optimization: Skip every 3rd frame only (process 2 of 3)
     if (isMobile) {
       frameSkipCounterRef.current++;
-      if (frameSkipCounterRef.current % 2 === 0) {
-        updatePerformanceMetrics(0, true); // Log as skipped frame
+      if (frameSkipCounterRef.current % 3 === 0) {
         return;
       }
     }
     
-    // Desktop throttling: 15 FPS limit, Mobile: Natural limit through frame skipping
+    // Desktop: 30 FPS target (33ms) for smoother tracking
     const now = performance.now();
-    if (!isMobile && now - frameThrottleRef.current < 67) {
-      updatePerformanceMetrics(0, true);
+    if (!isMobile && now - frameThrottleRef.current < 33) {
       return;
     }
     frameThrottleRef.current = now;
@@ -555,17 +548,17 @@ export const useHandTracking = (): HandTrackingResult => {
       // Configure hand detection settings
       // Configure hand detection settings based on device type
       const mobileSettings = {
-        maxNumHands: 1, // Always 1 hand for mobile performance
-        modelComplexity: 0, // Lite model for mobile
-        minDetectionConfidence: 0.5, // Lower for mobile responsiveness
-        minTrackingConfidence: 0.3 // Lower for mobile responsiveness
+        maxNumHands: 1,
+        modelComplexity: 0,
+        minDetectionConfidence: 0.4,
+        minTrackingConfidence: 0.25
       };
       
       const desktopSettings = {
-        maxNumHands: 1, // Keep 1 hand for consistency
-        modelComplexity: 0, // Use lite model for better performance
-        minDetectionConfidence: 0.6, // Slightly higher for desktop
-        minTrackingConfidence: 0.4 // Slightly higher for desktop  
+        maxNumHands: 1,
+        modelComplexity: 0,
+        minDetectionConfidence: 0.45,
+        minTrackingConfidence: 0.3
       };
       
       const settings = isMobile ? mobileSettings : desktopSettings;
