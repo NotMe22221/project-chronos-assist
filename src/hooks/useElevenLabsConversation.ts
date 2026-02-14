@@ -3,6 +3,7 @@ import { useConversation } from '@11labs/react';
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { useFeatureToggle } from '@/contexts/FeatureToggleContext';
+import { supabase } from '@/integrations/supabase/client';
 
 interface ConversationMessage {
   id: string;
@@ -150,9 +151,17 @@ export const useElevenLabsConversation = () => {
       // Request microphone permission first
       await navigator.mediaDevices.getUserMedia({ audio: true });
       
-      // Start conversation with the agent ID using the correct API format
+      // Get signed URL from edge function
+      const { data, error } = await supabase.functions.invoke('elevenlabs-conversation-token', {
+        body: { agentId: 'agent_0401k3w8fx86e22sdaw6j6va5dd7' }
+      });
+
+      if (error || !data?.signed_url) {
+        throw new Error(error?.message || 'Failed to get conversation token');
+      }
+
       const id = await conversation.startSession({
-        signedUrl: `https://api.elevenlabs.io/v1/convai/conversation?agent_id=agent_0401k3w8fx86e22sdaw6j6va5dd7`
+        signedUrl: data.signed_url
       });
       
       setConversationId(id);
@@ -161,8 +170,8 @@ export const useElevenLabsConversation = () => {
     } catch (error) {
       console.error('Failed to start conversation:', error);
       toast({
-        title: "Microphone Error",
-        description: "Failed to access microphone. Please check permissions.",
+        title: "Connection Error",
+        description: error instanceof Error ? error.message : "Failed to start conversation. Please try again.",
         variant: "destructive"
       });
     }
