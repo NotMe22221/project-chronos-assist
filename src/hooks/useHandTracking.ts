@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 
 // Interface for gesture state management
 interface GestureState {
-  type: 'fist' | 'open' | 'peace' | 'pointing' | 'none';
+  type: 'scroll' | 'peace' | 'pointing' | 'none';
   confidence: number;
 }
 
@@ -86,6 +86,7 @@ export const useHandTracking = (): HandTrackingResult => {
   const smoothCursorRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const cursorActivatedRef = useRef(false);
   const handLostTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastHandYRef = useRef<number | null>(null);
 
   // Mobile device detection on hook initialization
   useEffect(() => {
@@ -196,8 +197,6 @@ export const useHandTracking = (): HandTrackingResult => {
       const extendedFingers = countExtendedFingers(landmarks);
       
       switch (extendedFingers) {
-        case 0:
-          return 'fist'; // Closed fist - scroll up
         case 1: {
           // Check if only index finger is extended (pointing gesture)
           const indexUp = landmarks[8]?.y !== undefined && landmarks[6]?.y !== undefined && 
@@ -205,12 +204,11 @@ export const useHandTracking = (): HandTrackingResult => {
           const middleFolded = landmarks[12]?.y !== undefined && landmarks[10]?.y !== undefined && 
                               landmarks[12].y > landmarks[10].y;
           if (indexUp && middleFolded) {
-            return 'pointing'; // Pointing - cursor mode
+            return 'pointing';
           }
-          return 'unknown';
+          return 'scroll';
         }
-        case 2:
-          // Check if it's specifically index and middle fingers (peace sign)
+        case 2: {
           const indexExtended = landmarks[8]?.y !== undefined && landmarks[6]?.y !== undefined && 
                                landmarks[8].y < landmarks[6].y;
           const middleExtended = landmarks[12]?.y !== undefined && landmarks[10]?.y !== undefined && 
@@ -219,15 +217,13 @@ export const useHandTracking = (): HandTrackingResult => {
                             landmarks[16].y > landmarks[14].y;
           const pinkyFolded = landmarks[20]?.y !== undefined && landmarks[18]?.y !== undefined && 
                              landmarks[20].y > landmarks[18].y;
-          
           if (indexExtended && middleExtended && ringFolded && pinkyFolded) {
-            return 'peace'; // Peace sign - click button
+            return 'peace';
           }
-          return 'unknown';
-        case 5:
-          return 'open'; // Open hand - scroll down
+          return 'scroll';
+        }
         default:
-          return 'unknown';
+          return 'scroll';
       }
     } catch (error) {
       console.error('Error detecting gesture:', error);
@@ -242,28 +238,32 @@ export const useHandTracking = (): HandTrackingResult => {
     const now = Date.now();
     
     switch (gesture) {
-      case 'fist':
-        setCurrentGesture('✊ Fist detected → Scroll UP');
-        setGestureState({ type: 'fist', confidence: 0.9 });
-        addLog('Fist gesture detected - Scrolling UP');
-        window.scrollBy({ top: -50, behavior: 'smooth' });
-        break;
-        
-      case 'open':
-        setCurrentGesture('✋ Open hand detected → Scroll DOWN');
-        setGestureState({ type: 'open', confidence: 0.9 });
-        addLog('Open hand gesture detected - Scrolling DOWN');
-        window.scrollBy({ top: 50, behavior: 'smooth' });
+      case 'scroll':
+        // Position-based scrolling using wrist (landmark 0) Y position
+        if (landmarks && landmarks[0]) {
+          const currentY = landmarks[0].y; // 0 = top, 1 = bottom in camera
+          if (lastHandYRef.current !== null) {
+            const delta = currentY - lastHandYRef.current;
+            // Dead zone to prevent micro-jitter from triggering scroll
+            if (Math.abs(delta) > 0.008) {
+              const scrollAmount = delta * 800; // Proportional speed
+              window.scrollBy({ top: scrollAmount });
+              setCurrentGesture(delta > 0 ? '👇 Scrolling DOWN' : '👆 Scrolling UP');
+            }
+          }
+          lastHandYRef.current = currentY;
+        }
+        setGestureState({ type: 'scroll', confidence: 0.9 });
         break;
 
       case 'pointing':
         if (landmarks && landmarks[8]) {
-          // Cancel any pending hide timer since hand is back
           if (handLostTimerRef.current) {
             clearTimeout(handLostTimerRef.current);
             handLostTimerRef.current = null;
           }
           cursorActivatedRef.current = true;
+          lastHandYRef.current = null; // Reset scroll baseline
           // Map fingertip position to screen coordinates
           const rawX = (1 - landmarks[8].x) * window.innerWidth;
           const rawY = landmarks[8].y * window.innerHeight;
@@ -434,11 +434,11 @@ export const useHandTracking = (): HandTrackingResult => {
         
         // Detect and handle gesture
         const gesture = detectGesture(landmarks);
-        // For pointing, always update cursor even if gesture hasn't changed
-        if (gesture === 'pointing') {
+        // For pointing and scroll, always update every frame with landmarks
+        if (gesture === 'pointing' || gesture === 'scroll') {
           handleGesture(gesture, landmarks);
         } else if (gesture !== lastGestureRef.current) {
-          handleGesture(gesture);
+          handleGesture(gesture, landmarks);
         }
         lastGestureRef.current = gesture;
       } else {

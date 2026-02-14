@@ -156,8 +156,7 @@ export const HandTrackingInterface = () => {
           {/* Real-time Gesture Indicator */}
           {isActive && (
             <div className="absolute top-2 left-2 px-3 py-1 bg-primary/90 rounded-lg text-xs text-primary-foreground font-bold backdrop-blur-sm border border-primary/20">
-              {gestureState.type === 'fist' && '✊ Fist → Scroll UP'}
-              {gestureState.type === 'open' && '✋ Open → Scroll DOWN'}
+              {gestureState.type === 'scroll' && '🖐️ Scroll Mode'}
               {gestureState.type === 'peace' && '✌️ Peace → CLICK'}
               {gestureState.type === 'pointing' && '☝️ Pointing → Cursor'}
               {gestureState.type === 'none' && '🤚 No Gesture'}
@@ -180,12 +179,8 @@ export const HandTrackingInterface = () => {
           </h4>
           <div className="space-y-1 text-xs text-foreground/90 text-enhanced">
             <div className="flex items-center justify-between">
-              <span>✊ <strong>Fist (0 fingers)</strong></span>
-              <span className="text-primary">→ Scroll UP</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span>✋ <strong>Open Hand (5 fingers)</strong></span>
-              <span className="text-primary">→ Scroll DOWN</span>
+              <span>🖐️ <strong>Move Hand Up/Down</strong></span>
+              <span className="text-primary">→ Scroll Page</span>
             </div>
             <div className="flex items-center justify-between">
               <span>✌️ <strong>Peace Sign (2 fingers)</strong></span>
