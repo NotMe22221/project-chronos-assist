@@ -1,143 +1,167 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useConversation } from '@11labs/react';
+import { useState, useCallback, useEffect, useRef } from 'react';
+import { useToast } from '@/hooks/use-toast';
 import { useFeatureToggle } from '@/contexts/FeatureToggleContext';
 
-interface VoiceMessage {
+const AGENT_ID = 'agent_0401k3w8fx86e22sdaw6j6va5dd7';
+
+interface ConversationMessage {
   id: string;
   text: string;
   timestamp: Date;
   type: 'user' | 'ai';
 }
 
-// Cross-browser SpeechRecognition
-const SpeechRecognition =
-  (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-
 export const useVoiceAssistant = () => {
-  const [messages, setMessages] = useState<VoiceMessage[]>([
-    { id: '0', text: 'JARVIS online. Speak a command to begin.', timestamp: new Date(), type: 'ai' },
+  const [messages, setMessages] = useState<ConversationMessage[]>([
+    { id: '1', text: 'JARVIS online. Voice and gesture control ready.', timestamp: new Date(), type: 'ai' },
   ]);
-  const [isListening, setIsListening] = useState(false);
-  const [isSpeaking, setIsSpeaking] = useState(false);
-  const [isSupported] = useState(() => !!SpeechRecognition);
-
+  const [isConnected, setIsConnected] = useState(false);
+  const [isConnecting, setIsConnecting] = useState(false);
+  const { toast } = useToast();
   const { processVoiceCommand, features } = useFeatureToggle();
-  const recognitionRef = useRef<any>(null);
-  const synthRef = useRef(window.speechSynthesis);
-  const restartRef = useRef(false);
 
-  const addMessage = useCallback((text: string, type: 'user' | 'ai') => {
-    setMessages(prev => [...prev, { id: Date.now().toString(), text, timestamp: new Date(), type }]);
-  }, []);
+  const featuresRef = useRef(features);
+  featuresRef.current = features;
+  const prevVoiceRef = useRef(features.voiceResponses);
 
-  // ——— TTS ———
-  const speak = useCallback((text: string) => {
-    if (!features.voiceResponses) return;
-    const synth = synthRef.current;
-    synth.cancel(); // stop any current speech
-    const utt = new SpeechSynthesisUtterance(text);
-    utt.rate = 1.05;
-    utt.pitch = 0.95;
-    utt.onstart = () => setIsSpeaking(true);
-    utt.onend = () => setIsSpeaking(false);
-    utt.onerror = () => setIsSpeaking(false);
-    synth.speak(utt);
-  }, [features.voiceResponses]);
+  const conversation = useConversation({
+    clientTools: {
+      enableHandTracking: () => {
+        if (featuresRef.current.handTracking) return 'Hand tracking is already enabled.';
+        processVoiceCommand('start hand tracking');
+        return 'Hand tracking enabled.';
+      },
+      disableHandTracking: () => {
+        if (!featuresRef.current.handTracking) return 'Hand tracking is already disabled.';
+        processVoiceCommand('stop hand tracking');
+        return 'Hand tracking disabled.';
+      },
+      enableVoice: () => {
+        if (featuresRef.current.voiceResponses) return 'Voice responses are already enabled.';
+        processVoiceCommand('start talking');
+        return 'Voice responses enabled.';
+      },
+      disableVoice: () => {
+        if (!featuresRef.current.voiceResponses) return 'Voice responses are already disabled.';
+        processVoiceCommand('stop talking');
+        return 'Voice responses disabled.';
+      },
+    },
+    onConnect: () => {
+      setIsConnected(true);
+      setIsConnecting(false);
+      toast({ title: 'JARVIS Connected', description: 'Voice assistant is active' });
+    },
+    onDisconnect: () => {
+      setIsConnected(false);
+      setIsConnecting(false);
+    },
+    onMessage: (message) => {
+      if (!message || typeof message !== 'object') return;
 
-  // ——— Command processing ———
-  const handleResult = useCallback((transcript: string) => {
-    const clean = transcript.trim();
-    if (!clean) return;
-    addMessage(clean, 'user');
+      let text = '';
+      let type: 'user' | 'ai' = 'ai';
 
-    // Try FeatureToggleContext regex commands first
-    const matched = processVoiceCommand(clean);
+      if ('message' in message && typeof message.message === 'string') text = message.message;
+      else if ('text' in message && typeof message.text === 'string') text = message.text;
 
-    if (matched) {
-      // Determine which command was matched for a spoken response
-      const lower = clean.toLowerCase();
-      let response = 'Done.';
-      if (/start\s+(hand|gesture|tracking)|enable\s+(hand|gesture)|hand.*(on|track)|turn\s+on.*(hand|gesture)/i.test(lower))
-        response = 'Hand tracking enabled.';
-      else if (/stop\s+(hand|gesture|tracking)|disable\s+(hand|gesture)|hand.*(off)|turn\s+off.*(hand|gesture)/i.test(lower))
-        response = 'Hand tracking disabled.';
-      else if (/stop\s+talk|be\s+quiet|shut\s+up|mute|disable\s+voice|voice\s+off|no\s+voice|silence|hush/i.test(lower))
-        response = 'Voice muted.';
-      else if (/start\s+talk|unmute|enable\s+voice|voice\s+on|speak\s+again/i.test(lower))
-        response = 'Voice responses enabled.';
+      if ('source' in message) type = message.source === 'user' ? 'user' : 'ai';
 
-      addMessage(response, 'ai');
-      speak(response);
-    } else {
-      const response = `I heard: "${clean}". Try commands like "start hand tracking" or "mute".`;
-      addMessage(response, 'ai');
-      speak(response);
-    }
-  }, [addMessage, processVoiceCommand, speak]);
+      if (!text.trim()) return;
 
-  // ——— Recognition lifecycle ———
-  const startListening = useCallback(() => {
-    if (!isSupported) return;
-    if (recognitionRef.current) {
-      try { recognitionRef.current.abort(); } catch {}
-    }
+      if (type === 'user') processVoiceCommand(text);
 
-    const recognition = new SpeechRecognition();
-    recognition.continuous = true;
-    recognition.interimResults = false;
-    recognition.lang = 'en-US';
+      setMessages((prev) => [
+        ...prev,
+        { id: Date.now().toString(), text, timestamp: new Date(), type },
+      ]);
+    },
+    onError: (error: unknown) => {
+      console.error('Voice assistant error:', error);
+      setIsConnecting(false);
+      toast({
+        title: 'Voice Error',
+        description: typeof error === 'string' ? error : 'Connection error',
+        variant: 'destructive',
+      });
+    },
+  });
 
-    recognition.onresult = (e: any) => {
-      const last = e.results[e.results.length - 1];
-      if (last.isFinal) handleResult(last[0].transcript);
-    };
+  const startConversation = useCallback(async () => {
+    setIsConnecting(true);
+    try {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
-    recognition.onstart = () => setIsListening(true);
-    recognition.onend = () => {
-      setIsListening(false);
-      // Auto-restart if still desired
-      if (restartRef.current) {
-        try { recognition.start(); } catch {}
+      console.log('Fetching conversation token...');
+      const response = await fetch(
+        `${supabaseUrl}/functions/v1/elevenlabs-conversation-token`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': supabaseKey,
+            'Authorization': `Bearer ${supabaseKey}`,
+          },
+          body: JSON.stringify({ agentId: AGENT_ID }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.text();
+        console.error('Edge function error:', response.status, errorData);
+        throw new Error(`Server error (${response.status}): ${errorData}`);
       }
-    };
-    recognition.onerror = (e: any) => {
-      // 'no-speech' and 'aborted' are non-fatal
-      if (e.error !== 'no-speech' && e.error !== 'aborted') {
-        console.error('Speech recognition error:', e.error);
+
+      const data = await response.json();
+      if (!data?.signed_url) {
+        console.error('No signed_url in response:', data);
+        throw new Error(data?.error || 'No signed URL received');
       }
-    };
 
-    recognitionRef.current = recognition;
-    restartRef.current = true;
-    try { recognition.start(); } catch {}
-  }, [isSupported, handleResult]);
-
-  const stopListening = useCallback(() => {
-    restartRef.current = false;
-    if (recognitionRef.current) {
-      try { recognitionRef.current.abort(); } catch {}
-      recognitionRef.current = null;
+      console.log('Got signed URL, requesting microphone...');
+      await navigator.mediaDevices.getUserMedia({ audio: true });
+      await conversation.startSession({ signedUrl: data.signed_url });
+    } catch (err) {
+      setIsConnecting(false);
+      console.error('Failed to start voice assistant:', err);
+      const msg = err instanceof Error ? err.message : 'Connection failed';
+      toast({
+        title: 'Connection Error',
+        description: msg.includes('Permission') ? 'Microphone access required.' : msg,
+        variant: 'destructive',
+      });
     }
-    setIsListening(false);
-  }, []);
+  }, [conversation, toast]);
 
-  // Cleanup on unmount
+  const endConversation = useCallback(async () => {
+    try {
+      await conversation.endSession();
+    } catch (err) {
+      console.error('Failed to end conversation:', err);
+    }
+  }, [conversation]);
+
+  // Mute/unmute on voice toggle change
   useEffect(() => {
-    return () => {
-      restartRef.current = false;
-      if (recognitionRef.current) {
-        try { recognitionRef.current.abort(); } catch {}
+    if (isConnected && prevVoiceRef.current !== features.voiceResponses) {
+      prevVoiceRef.current = features.voiceResponses;
+      try {
+        conversation.setVolume({ volume: features.voiceResponses ? 1 : 0 });
+      } catch (e) {
+        console.error('Volume update failed:', e);
       }
-      synthRef.current.cancel();
-    };
-  }, []);
+    }
+  }, [features.voiceResponses, isConnected, conversation]);
 
   return {
     messages,
-    isListening,
-    isSpeaking,
-    isSupported,
-    startListening,
-    stopListening,
-    speak,
+    isConnected,
+    isConnecting,
+    isSpeaking: conversation.isSpeaking,
+    status: conversation.status,
+    startConversation,
+    endConversation,
   };
 };
