@@ -87,6 +87,8 @@ export const useHandTracking = (): HandTrackingResult => {
   const cursorActivatedRef = useRef(false);
   const handLostTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastHandYRef = useRef<number | null>(null);
+  const scrollVelocityRef = useRef<number>(0);
+  const scrollMomentumRAF = useRef<number | null>(null);
 
   // Mobile device detection on hook initialization
   useEffect(() => {
@@ -246,7 +248,8 @@ export const useHandTracking = (): HandTrackingResult => {
             const delta = currentY - lastHandYRef.current;
             // Dead zone to prevent micro-jitter from triggering scroll
             if (Math.abs(delta) > 0.008) {
-              const scrollAmount = delta * 800; // Proportional speed
+              const scrollAmount = delta * 800;
+              scrollVelocityRef.current = scrollAmount; // Store velocity for momentum
               window.scrollBy({ top: scrollAmount });
               setCurrentGesture(delta > 0 ? '👇 Scrolling DOWN' : '👆 Scrolling UP');
             }
@@ -257,6 +260,12 @@ export const useHandTracking = (): HandTrackingResult => {
         break;
 
       case 'pointing':
+        // Stop any scroll momentum when switching to pointing
+        if (scrollMomentumRAF.current) {
+          cancelAnimationFrame(scrollMomentumRAF.current);
+          scrollMomentumRAF.current = null;
+          scrollVelocityRef.current = 0;
+        }
         if (landmarks && landmarks[8]) {
           if (handLostTimerRef.current) {
             clearTimeout(handLostTimerRef.current);
@@ -442,7 +451,26 @@ export const useHandTracking = (): HandTrackingResult => {
         }
         lastGestureRef.current = gesture;
       } else {
-        // Hand lost — start a delayed hide (3 seconds) so cursor persists through brief drops
+        // Hand lost — apply scroll momentum if last gesture was scroll
+        if (lastGestureRef.current === 'scroll' && Math.abs(scrollVelocityRef.current) > 1) {
+          // Start momentum deceleration loop
+          if (!scrollMomentumRAF.current) {
+            const decelerate = () => {
+              scrollVelocityRef.current *= 0.92; // Friction
+              if (Math.abs(scrollVelocityRef.current) > 0.5) {
+                window.scrollBy({ top: scrollVelocityRef.current });
+                scrollMomentumRAF.current = requestAnimationFrame(decelerate);
+              } else {
+                scrollVelocityRef.current = 0;
+                scrollMomentumRAF.current = null;
+                lastHandYRef.current = null;
+              }
+            };
+            scrollMomentumRAF.current = requestAnimationFrame(decelerate);
+          }
+        }
+
+        // Cursor hide with delay
         if (cursorActivatedRef.current && !handLostTimerRef.current) {
           handLostTimerRef.current = setTimeout(() => {
             setCursorPosition(prev => ({ ...prev, visible: false }));
@@ -640,6 +668,9 @@ export const useHandTracking = (): HandTrackingResult => {
       }
       if (handLostTimerRef.current) {
         clearTimeout(handLostTimerRef.current);
+      }
+      if (scrollMomentumRAF.current) {
+        cancelAnimationFrame(scrollMomentumRAF.current);
       }
     };
   }, []);
