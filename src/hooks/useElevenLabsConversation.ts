@@ -177,9 +177,11 @@ export const useElevenLabsConversation = () => {
     }
   }, [conversation]);
 
-  // Mute/unmute voice output when toggle changes
+  // Track previous voiceResponses value to only adjust volume on actual toggle changes
+  const prevVoiceRef = useRef(features.voiceResponses);
   useEffect(() => {
-    if (isConnected) {
+    if (isConnected && prevVoiceRef.current !== features.voiceResponses) {
+      prevVoiceRef.current = features.voiceResponses;
       try {
         conversation.setVolume({ volume: features.voiceResponses ? 1 : 0 });
       } catch (e) {
