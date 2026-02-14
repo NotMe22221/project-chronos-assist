@@ -1,9 +1,7 @@
-import { useConversation } from '@11labs/react';
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { useFeatureToggle } from '@/contexts/FeatureToggleContext';
-
-const AGENT_ID = 'agent_0401k3w8fx86e22sdaw6j6va5dd7';
+import { supabase } from '@/integrations/supabase/client';
 
 interface ConversationMessage {
   id: string;
@@ -18,149 +16,154 @@ export const useVoiceAssistant = () => {
   ]);
   const [isConnected, setIsConnected] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [status, setStatus] = useState('Ready');
   const { toast } = useToast();
   const { processVoiceCommand, features } = useFeatureToggle();
 
+  const recognitionRef = useRef<any>(null);
   const featuresRef = useRef(features);
   featuresRef.current = features;
-  const prevVoiceRef = useRef(features.voiceResponses);
 
-  const conversation = useConversation({
-    clientTools: {
-      enableHandTracking: () => {
-        if (featuresRef.current.handTracking) return 'Hand tracking is already enabled.';
-        processVoiceCommand('start hand tracking');
-        return 'Hand tracking enabled.';
-      },
-      disableHandTracking: () => {
-        if (!featuresRef.current.handTracking) return 'Hand tracking is already disabled.';
-        processVoiceCommand('stop hand tracking');
-        return 'Hand tracking disabled.';
-      },
-      enableVoice: () => {
-        if (featuresRef.current.voiceResponses) return 'Voice responses are already enabled.';
-        processVoiceCommand('start talking');
-        return 'Voice responses enabled.';
-      },
-      disableVoice: () => {
-        if (!featuresRef.current.voiceResponses) return 'Voice responses are already disabled.';
-        processVoiceCommand('stop talking');
-        return 'Voice responses disabled.';
-      },
-    },
-    onConnect: () => {
-      setIsConnected(true);
-      setIsConnecting(false);
-      toast({ title: 'JARVIS Connected', description: 'Voice assistant is active' });
-    },
-    onDisconnect: () => {
-      setIsConnected(false);
-      setIsConnecting(false);
-    },
-    onMessage: (message) => {
-      if (!message || typeof message !== 'object') return;
+  const addMessage = useCallback((text: string, type: 'user' | 'ai') => {
+    setMessages(prev => [...prev, { id: Date.now().toString(), text, timestamp: new Date(), type }]);
+  }, []);
 
-      let text = '';
-      let type: 'user' | 'ai' = 'ai';
+  const speak = useCallback((text: string) => {
+    if (!featuresRef.current.voiceResponses) return;
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = 1;
+    utterance.pitch = 0.9;
+    utterance.onstart = () => setIsSpeaking(true);
+    utterance.onend = () => setIsSpeaking(false);
+    utterance.onerror = () => setIsSpeaking(false);
+    window.speechSynthesis.speak(utterance);
+  }, []);
 
-      if ('message' in message && typeof message.message === 'string') text = message.message;
-      else if ('text' in message && typeof message.text === 'string') text = message.text;
-
-      if ('source' in message) type = message.source === 'user' ? 'user' : 'ai';
-
-      if (!text.trim()) return;
-
-      if (type === 'user') processVoiceCommand(text);
-
-      setMessages((prev) => [
-        ...prev,
-        { id: Date.now().toString(), text, timestamp: new Date(), type },
-      ]);
-    },
-    onError: (error: unknown) => {
-      console.error('Voice assistant error:', error);
-      setIsConnecting(false);
-      toast({
-        title: 'Voice Error',
-        description: typeof error === 'string' ? error : 'Connection error',
-        variant: 'destructive',
+  const askJarvis = useCallback(async (userText: string) => {
+    setStatus('Thinking...');
+    try {
+      const { data, error } = await supabase.functions.invoke('jarvis-chat', {
+        body: { message: userText },
       });
-    },
-  });
+
+      if (error) throw error;
+
+      const reply = data?.reply || "I'm sorry, I couldn't process that.";
+      addMessage(reply, 'ai');
+      speak(reply);
+    } catch (err) {
+      console.error('Jarvis AI error:', err);
+      const fallback = "I'm having trouble connecting to my systems. Please try again.";
+      addMessage(fallback, 'ai');
+      toast({ title: 'AI Error', description: 'Could not reach JARVIS AI.', variant: 'destructive' });
+    } finally {
+      setStatus(isConnected ? 'Listening' : 'Ready');
+    }
+  }, [addMessage, speak, toast, isConnected]);
+
+  const handleResult = useCallback((event: SpeechRecognitionEvent) => {
+    const last = event.results[event.results.length - 1];
+    if (!last.isFinal) return;
+
+    const transcript = last[0].transcript.trim();
+    if (!transcript) return;
+
+    addMessage(transcript, 'user');
+
+    // Try local command first
+    const wasCommand = processVoiceCommand(transcript);
+    if (wasCommand) {
+      addMessage('Command processed.', 'ai');
+      speak('Done.');
+    } else {
+      askJarvis(transcript);
+    }
+  }, [addMessage, processVoiceCommand, askJarvis, speak]);
 
   const startConversation = useCallback(async () => {
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SR) {
+      toast({ title: 'Not Supported', description: 'Speech recognition is not supported in this browser.', variant: 'destructive' });
+      return;
+    }
+
     setIsConnecting(true);
     try {
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-
-      console.log('Fetching conversation token...');
-      const response = await fetch(
-        `${supabaseUrl}/functions/v1/elevenlabs-conversation-token`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'apikey': supabaseKey,
-            'Authorization': `Bearer ${supabaseKey}`,
-          },
-          body: JSON.stringify({ agentId: AGENT_ID }),
-        }
-      );
-
-      if (!response.ok) {
-        const errorData = await response.text();
-        console.error('Edge function error:', response.status, errorData);
-        throw new Error(`Server error (${response.status}): ${errorData}`);
-      }
-
-      const data = await response.json();
-      if (!data?.signed_url) {
-        console.error('No signed_url in response:', data);
-        throw new Error(data?.error || 'No signed URL received');
-      }
-
-      console.log('Got signed URL, requesting microphone...');
       await navigator.mediaDevices.getUserMedia({ audio: true });
-      await conversation.startSession({ signedUrl: data.signed_url });
-    } catch (err) {
+    } catch {
       setIsConnecting(false);
-      console.error('Failed to start voice assistant:', err);
-      const msg = err instanceof Error ? err.message : 'Connection failed';
-      toast({
-        title: 'Connection Error',
-        description: msg.includes('Permission') ? 'Microphone access required.' : msg,
-        variant: 'destructive',
-      });
+      toast({ title: 'Microphone Required', description: 'Please allow microphone access.', variant: 'destructive' });
+      return;
     }
-  }, [conversation, toast]);
+
+    const recognition = new SR();
+    recognition.continuous = true;
+    recognition.interimResults = false;
+    recognition.lang = 'en-US';
+
+    recognition.onresult = handleResult;
+    recognition.onerror = (e: SpeechRecognitionErrorEvent) => {
+      if (e.error === 'not-allowed') {
+        setIsConnected(false);
+        setStatus('Ready');
+        toast({ title: 'Mic Blocked', description: 'Microphone permission denied.', variant: 'destructive' });
+      }
+      // 'no-speech' and 'aborted' are normal — ignore
+    };
+    recognition.onend = () => {
+      // Auto-restart if still connected
+      if (recognitionRef.current === recognition) {
+        try { recognition.start(); } catch { /* already running */ }
+      }
+    };
+
+    recognition.start();
+    recognitionRef.current = recognition;
+    setIsConnected(true);
+    setIsConnecting(false);
+    setStatus('Listening');
+    toast({ title: 'JARVIS Active', description: 'Listening for your voice.' });
+  }, [handleResult, toast]);
 
   const endConversation = useCallback(async () => {
-    try {
-      await conversation.endSession();
-    } catch (err) {
-      console.error('Failed to end conversation:', err);
+    if (recognitionRef.current) {
+      const r = recognitionRef.current;
+      recognitionRef.current = null;
+      r.stop();
     }
-  }, [conversation]);
+    window.speechSynthesis.cancel();
+    setIsConnected(false);
+    setIsSpeaking(false);
+    setStatus('Ready');
+  }, []);
 
-  // Mute/unmute on voice toggle change
+  // Stop speaking when voice responses toggled off
   useEffect(() => {
-    if (isConnected && prevVoiceRef.current !== features.voiceResponses) {
-      prevVoiceRef.current = features.voiceResponses;
-      try {
-        conversation.setVolume({ volume: features.voiceResponses ? 1 : 0 });
-      } catch (e) {
-        console.error('Volume update failed:', e);
-      }
+    if (!features.voiceResponses) {
+      window.speechSynthesis.cancel();
+      setIsSpeaking(false);
     }
-  }, [features.voiceResponses, isConnected, conversation]);
+  }, [features.voiceResponses]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+        recognitionRef.current = null;
+      }
+      window.speechSynthesis.cancel();
+    };
+  }, []);
 
   return {
     messages,
     isConnected,
     isConnecting,
-    isSpeaking: conversation.isSpeaking,
-    status: conversation.status,
+    isSpeaking,
+    status,
     startConversation,
     endConversation,
   };
