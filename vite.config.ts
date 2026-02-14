@@ -19,8 +19,7 @@ export default defineConfig(({ mode }) => ({
     alias: {
       "@": path.resolve(__dirname, "./src"),
     },
-    // Ensure all packages use the same React instance to prevent hook dispatcher errors
-    dedupe: ['react', 'react-dom'],
+    dedupe: ['react', 'react-dom', 'react/jsx-runtime', '@elevenlabs/react'],
   },
   // Make sure Vite pre-bundles a single version of React/ReactDOM
   optimizeDeps: {
