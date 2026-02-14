@@ -30,22 +30,38 @@ export const useElevenLabsConversation = () => {
   const conversation = useConversation({
     clientTools: {
       enableHandTracking: () => {
-        console.log('🛠️ Client tool: enableHandTracking');
+        if (features.handTracking) {
+          console.log('🛠️ Client tool: hand tracking already enabled');
+          return 'Hand tracking is already enabled.';
+        }
+        console.log('🛠️ Client tool: enabling hand tracking');
         processVoiceCommand('start hand tracking');
         return 'Hand tracking enabled.';
       },
       disableHandTracking: () => {
-        console.log('🛠️ Client tool: disableHandTracking');
+        if (!features.handTracking) {
+          console.log('🛠️ Client tool: hand tracking already disabled');
+          return 'Hand tracking is already disabled.';
+        }
+        console.log('🛠️ Client tool: disabling hand tracking');
         processVoiceCommand('stop hand tracking');
         return 'Hand tracking disabled.';
       },
       enableVoice: () => {
-        console.log('🛠️ Client tool: enableVoice');
+        if (features.voiceResponses) {
+          console.log('🛠️ Client tool: voice already enabled');
+          return 'Voice responses are already enabled.';
+        }
+        console.log('🛠️ Client tool: enabling voice');
         processVoiceCommand('start talking');
         return 'Voice responses enabled.';
       },
       disableVoice: () => {
-        console.log('🛠️ Client tool: disableVoice');
+        if (!features.voiceResponses) {
+          console.log('🛠️ Client tool: voice already disabled');
+          return 'Voice responses are already disabled.';
+        }
+        console.log('🛠️ Client tool: disabling voice');
         processVoiceCommand('stop talking');
         return 'Voice responses disabled.';
       },

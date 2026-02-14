@@ -86,8 +86,15 @@ export const FeatureToggleProvider = ({ children }: { children: ReactNode }) => 
   const processVoiceCommand = useCallback((text: string): boolean => {
     for (const cmd of VOICE_COMMANDS) {
       if (cmd.patterns.some(p => p.test(text))) {
-        setFeatures(prev => ({ ...prev, [cmd.feature]: cmd.action }));
-        console.log(`🎤 Voice command: "${text}" → ${cmd.feature} = ${cmd.action}`);
+        // State-aware: only act if not already in desired state
+        setFeatures(prev => {
+          if (prev[cmd.feature] === cmd.action) {
+            console.log(`🎤 Voice command: "${text}" → ${cmd.feature} already ${cmd.action ? 'enabled' : 'disabled'}, no action needed`);
+            return prev;
+          }
+          console.log(`🎤 Voice command: "${text}" → ${cmd.feature} = ${cmd.action}`);
+          return { ...prev, [cmd.feature]: cmd.action };
+        });
         return true;
       }
     }
