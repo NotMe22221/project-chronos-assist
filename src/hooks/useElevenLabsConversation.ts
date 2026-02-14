@@ -148,17 +148,26 @@ export const useElevenLabsConversation = () => {
 
   const startConversation = useCallback(async () => {
     try {
-      // Request microphone permission first
-      await navigator.mediaDevices.getUserMedia({ audio: true });
-      
-      // Get signed URL from edge function
+      // Get signed URL from edge function first
+      console.log('Fetching conversation token...');
       const { data, error } = await supabase.functions.invoke('elevenlabs-conversation-token', {
         body: { agentId: 'agent_0401k3w8fx86e22sdaw6j6va5dd7' }
       });
 
-      if (error || !data?.signed_url) {
-        throw new Error(error?.message || 'Failed to get conversation token');
+      if (error) {
+        console.error('Edge function error:', error);
+        throw new Error(error.message || 'Failed to get conversation token');
       }
+
+      if (!data?.signed_url) {
+        console.error('No signed_url in response:', data);
+        throw new Error(data?.error || 'No signed URL received from server');
+      }
+
+      console.log('Got signed URL, requesting microphone...');
+      
+      // Request microphone permission
+      await navigator.mediaDevices.getUserMedia({ audio: true });
 
       const id = await conversation.startSession({
         signedUrl: data.signed_url
@@ -169,9 +178,12 @@ export const useElevenLabsConversation = () => {
       
     } catch (error) {
       console.error('Failed to start conversation:', error);
+      const message = error instanceof Error ? error.message : "Failed to start conversation";
       toast({
         title: "Connection Error",
-        description: error instanceof Error ? error.message : "Failed to start conversation. Please try again.",
+        description: message.includes('microphone') || message.includes('Permission') 
+          ? "Microphone access required. Please allow microphone permission."
+          : message,
         variant: "destructive"
       });
     }
