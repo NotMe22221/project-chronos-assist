@@ -2,7 +2,7 @@ import { useConversation } from '@11labs/react';
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { useFeatureToggle } from '@/contexts/FeatureToggleContext';
-import { supabase } from '@/integrations/supabase/client';
+
 
 const AGENT_ID = 'agent_0401k3w8fx86e22sdaw6j6va5dd7';
 
@@ -99,14 +99,37 @@ export const useVoiceAssistant = () => {
   const startConversation = useCallback(async () => {
     setIsConnecting(true);
     try {
-      // Fetch signed URL from edge function
-      const { data, error } = await supabase.functions.invoke('elevenlabs-conversation-token', {
-        body: { agentId: AGENT_ID },
-      });
+      // Fetch signed URL from edge function using fetch for better error handling
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+      
+      console.log('Fetching conversation token...');
+      const response = await fetch(
+        `${supabaseUrl}/functions/v1/elevenlabs-conversation-token`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': supabaseKey,
+            'Authorization': `Bearer ${supabaseKey}`,
+          },
+          body: JSON.stringify({ agentId: AGENT_ID }),
+        }
+      );
 
-      if (error || !data?.signed_url) {
-        throw new Error(data?.error || error?.message || 'Failed to get voice token');
+      if (!response.ok) {
+        const errorData = await response.text();
+        console.error('Edge function error:', response.status, errorData);
+        throw new Error(`Server error (${response.status}): ${errorData}`);
       }
+
+      const data = await response.json();
+      if (!data?.signed_url) {
+        console.error('No signed_url in response:', data);
+        throw new Error(data?.error || 'No signed URL received');
+      }
+
+      console.log('Got signed URL, requesting microphone...');
 
       // Request microphone
       await navigator.mediaDevices.getUserMedia({ audio: true });
