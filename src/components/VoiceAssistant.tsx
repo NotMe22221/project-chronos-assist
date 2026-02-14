@@ -1,5 +1,5 @@
 import { useRef, useEffect } from 'react';
-import { Phone, PhoneOff, Mic, Volume2, VolumeX } from 'lucide-react';
+import { Mic, MicOff, Volume2, VolumeX } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { JarvisPanel } from './JarvisPanel';
 import { useVoiceAssistant } from '@/hooks/useVoiceAssistant';
@@ -52,7 +52,7 @@ export const VoiceAssistant = () => {
                 isConnecting && 'animate-pulse',
               )}
             >
-              {isConnected ? <PhoneOff className="h-5 w-5" /> : <Phone className="h-5 w-5" />}
+              {isConnected ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
             </Button>
             <div>
               <p className="text-sm font-medium text-foreground text-enhanced">
