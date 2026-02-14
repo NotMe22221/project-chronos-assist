@@ -1,5 +1,4 @@
 
-import { CommandCenter } from "@/components/CommandCenter";
 import { VoiceInterface } from "@/components/VoiceInterface";
 import { DataVisualization } from "@/components/DataVisualization";
 import { HandTrackingInterface } from "@/components/HandTrackingInterface";
@@ -22,10 +21,6 @@ const Index = () => {
             <VoiceInterface />
           </div>
           
-          {/* Command Center */}
-          <div className="lg:col-span-1">
-            <CommandCenter />
-          </div>
           
           {/* Hand Tracking Interface - NEW FEATURE */}
           <div className="lg:col-span-1">
