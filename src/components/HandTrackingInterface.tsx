@@ -1,8 +1,10 @@
+import { useEffect } from 'react';
 import { useHandTracking } from '@/hooks/useHandTracking';
 import { JarvisPanel } from './JarvisPanel';
 import { Button } from '@/components/ui/button';
-import { Hand, Play, Square, TestTube, AlertCircle, Camera, Target } from 'lucide-react';
+import { Hand, Play, Square, TestTube, AlertCircle, Camera, Target, Power } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useFeatureToggle } from '@/contexts/FeatureToggleContext';
 
 /**
  * Hand Tracking Interface Component
@@ -15,6 +17,7 @@ import { cn } from '@/lib/utils';
  * - Activity logging
  */
 export const HandTrackingInterface = () => {
+  const { features, toggleFeature } = useFeatureToggle();
   const {
     videoRef,
     canvasRef,
@@ -30,6 +33,8 @@ export const HandTrackingInterface = () => {
     performanceMetrics
   } = useHandTracking();
 
+  const isDisabledByToggle = !features.handTracking;
+
   /**
    * Test button click handler for gesture verification
    */
@@ -38,10 +43,17 @@ export const HandTrackingInterface = () => {
     // Add visual feedback or notification here if needed
   };
 
+  // Auto-stop tracking when feature is disabled via voice command
+  useEffect(() => {
+    if (isDisabledByToggle && isActive) {
+      stopHandTracking();
+    }
+  }, [isDisabledByToggle, isActive, stopHandTracking]);
+
   return (
     <>
-      {/* Floating Cursor Overlay */}
-      {cursorPosition.visible && (
+      {/* Floating Cursor Overlay — hidden when hand tracking is disabled */}
+      {cursorPosition.visible && !isDisabledByToggle && (
         <div
           className="fixed z-[9999] pointer-events-none"
           style={{
@@ -78,12 +90,24 @@ export const HandTrackingInterface = () => {
             </span>
           </div>
           <div className="flex items-center space-x-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => toggleFeature('handTracking')}
+              className={cn(
+                "h-7 px-2 text-xs",
+                isDisabledByToggle ? "text-destructive" : "text-success"
+              )}
+            >
+              <Power className="h-3 w-3 mr-1" />
+              {isDisabledByToggle ? 'OFF' : 'ON'}
+            </Button>
             <div className={cn(
               "w-2 h-2 rounded-full animate-pulse",
-              isActive ? "bg-success" : "bg-muted"
+              isActive && !isDisabledByToggle ? "bg-success" : "bg-muted"
             )}></div>
-            <span className="text-xs text-success font-medium text-enhanced">
-              {isActive ? "TRACKING" : "INACTIVE"}
+            <span className="text-xs font-medium text-enhanced">
+              {isDisabledByToggle ? 'DISABLED' : isActive ? "TRACKING" : "INACTIVE"}
             </span>
           </div>
         </div>
@@ -93,7 +117,7 @@ export const HandTrackingInterface = () => {
           {!isActive ? (
             <Button 
               onClick={startHandTracking} 
-              disabled={isLoading}
+              disabled={isLoading || isDisabledByToggle}
               className="flex-1 touch-target"
             >
               <Play className="h-4 w-4 mr-2" />
