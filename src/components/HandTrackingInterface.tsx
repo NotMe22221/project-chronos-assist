@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useHandTracking } from '@/hooks/useHandTracking';
 import { JarvisPanel } from './JarvisPanel';
 import { Button } from '@/components/ui/button';
@@ -8,13 +8,6 @@ import { useFeatureToggle } from '@/contexts/FeatureToggleContext';
 
 /**
  * Hand Tracking Interface Component
- * 
- * This component provides:
- * - Real-time webcam feed with hand landmarks
- * - Gesture recognition controls
- * - Visual feedback for detected gestures
- * - Test button for gesture interaction
- * - Activity logging
  */
 export const HandTrackingInterface = () => {
   const { features, toggleFeature } = useFeatureToggle();
@@ -34,21 +27,29 @@ export const HandTrackingInterface = () => {
   } = useHandTracking();
 
   const isDisabledByToggle = !features.handTracking;
+  const prevToggleRef = useRef(features.handTracking);
 
   /**
    * Test button click handler for gesture verification
    */
   const handleTestButtonClick = () => {
     console.log('✌️ Test button clicked via hand gesture!');
-    // Add visual feedback or notification here if needed
   };
 
-  // Auto-stop tracking when feature is disabled via voice command
+  // Auto-stop when disabled, auto-start when re-enabled via voice command
   useEffect(() => {
-    if (isDisabledByToggle && isActive) {
+    const wasDisabled = !prevToggleRef.current;
+    const isNowEnabled = features.handTracking;
+    prevToggleRef.current = features.handTracking;
+
+    if (!isNowEnabled && isActive) {
+      console.log('🛑 Voice command: stopping hand tracking');
       stopHandTracking();
+    } else if (isNowEnabled && wasDisabled && !isActive && !isLoading) {
+      console.log('▶️ Voice command: starting hand tracking');
+      startHandTracking();
     }
-  }, [isDisabledByToggle, isActive, stopHandTracking]);
+  }, [features.handTracking, isActive, isLoading, stopHandTracking, startHandTracking]);
 
   return (
     <>
