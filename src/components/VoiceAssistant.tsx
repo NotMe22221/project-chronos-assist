@@ -1,5 +1,5 @@
 import { useRef, useEffect } from 'react';
-import { Mic, MicOff, Volume2, VolumeX } from 'lucide-react';
+import { Phone, PhoneOff, Mic, Volume2, VolumeX } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { JarvisPanel } from './JarvisPanel';
 import { useVoiceAssistant } from '@/hooks/useVoiceAssistant';
@@ -10,11 +10,12 @@ export const VoiceAssistant = () => {
   const { features, toggleFeature } = useFeatureToggle();
   const {
     messages,
-    isListening,
+    isConnected,
+    isConnecting,
     isSpeaking,
-    isSupported,
-    startListening,
-    stopListening,
+    status,
+    startConversation,
+    endConversation,
   } = useVoiceAssistant();
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -23,52 +24,50 @@ export const VoiceAssistant = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const handleToggle = () => {
-    if (isListening) stopListening();
-    else startListening();
+  const handleToggle = async () => {
+    if (isConnected) await endConversation();
+    else await startConversation();
   };
 
   return (
     <JarvisPanel
       title="JARVIS Voice Assistant"
-      glow={isListening || isSpeaking}
+      glow={isConnected || isSpeaking}
       pulse={isSpeaking}
       className="h-full"
     >
       <div className="space-y-4">
-        {/* Controls */}
+        {/* Connection & Status */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Button
               onClick={handleToggle}
-              disabled={!isSupported}
+              disabled={isConnecting}
               size="lg"
               className={cn(
                 'h-14 w-14 rounded-full transition-all duration-300',
-                isListening
+                isConnected
                   ? 'bg-destructive hover:bg-destructive/80 shadow-glow'
                   : 'bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90',
+                isConnecting && 'animate-pulse',
               )}
             >
-              {isListening ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
+              {isConnected ? <PhoneOff className="h-5 w-5" /> : <Phone className="h-5 w-5" />}
             </Button>
             <div>
               <p className="text-sm font-medium text-foreground text-enhanced">
-                {!isSupported
-                  ? 'Speech not supported in this browser'
-                  : isListening
+                {isConnecting
+                  ? 'Connecting...'
+                  : isConnected
                   ? isSpeaking
                     ? 'JARVIS is speaking...'
-                    : 'Listening for commands...'
+                    : 'Listening for commands'
                   : 'Click to activate'}
               </p>
-              <p className="text-xs text-muted-foreground">
-                {isListening ? 'Web Speech API active' : 'Microphone off'}
-              </p>
+              <p className="text-xs text-muted-foreground">{status}</p>
             </div>
           </div>
 
-          {/* Voice toggle */}
           <Button
             variant="ghost"
             size="sm"
@@ -84,7 +83,7 @@ export const VoiceAssistant = () => {
         </div>
 
         {/* Listening indicator */}
-        {isListening && (
+        {isConnected && (
           <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-primary/10 border border-primary/20">
             <div className="relative flex items-center justify-center">
               <Mic className="h-4 w-4 text-primary" />

@@ -11,7 +11,7 @@ const Index = () => {
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-glow mb-2">JARVIS AI Assistant</h1>
           <p className="text-muted-foreground text-enhanced">
-            Voice commands + Hand gesture control — powered by Web Speech API & MediaPipe
+            Voice commands + Hand gesture control — powered by ElevenLabs & MediaPipe
           </p>
         </div>
         
