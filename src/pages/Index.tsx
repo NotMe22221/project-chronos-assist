@@ -1,5 +1,4 @@
 
-import { VoiceInterface } from "@/components/VoiceInterface";
 import { DataVisualization } from "@/components/DataVisualization";
 import { HandTrackingInterface } from "@/components/HandTrackingInterface";
 
@@ -15,14 +14,8 @@ const Index = () => {
           </p>
         </div>
         
-        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6 h-full">
-          {/* Voice Interface */}
-          <div className="lg:col-span-1">
-            <VoiceInterface />
-          </div>
-          
-          
-          {/* Hand Tracking Interface - NEW FEATURE */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-full">
+          {/* Hand Tracking Interface */}
           <div className="lg:col-span-1">
             <HandTrackingInterface />
           </div>
