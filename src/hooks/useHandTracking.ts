@@ -39,42 +39,70 @@ interface HandTrackingResult {
   performanceMetrics: PerformanceMetrics;
 }
 
+// Pre-computed skeleton connections (avoid recreating every frame)
+const HAND_CONNECTIONS = [
+  [0, 1], [1, 2], [2, 3], [3, 4],
+  [0, 5], [5, 6], [6, 7], [7, 8],
+  [0, 9], [9, 10], [10, 11], [11, 12],
+  [0, 13], [13, 14], [14, 15], [15, 16],
+  [0, 17], [17, 18], [18, 19], [19, 20],
+  [5, 9], [9, 13], [13, 17]
+];
+
+const FINGER_TIPS = [8, 12, 16, 20];
+const FINGER_PIPS = [6, 10, 14, 18];
+
 /**
- * Hand Tracking Hook using MediaPipe Hands (Mobile Optimized)
- * 
- * This hook implements:
- * - Real-time hand detection via webcam with mobile optimizations
- * - Gesture recognition (fist, open hand, peace sign)
- * - Smooth page scrolling based on gestures
- * - Button clicking with cooldown mechanism
- * - Visual feedback with hand landmarks
- * - Mobile device detection and adaptive performance settings
- * - Frame processing optimization with performance monitoring
+ * Hand Tracking Hook using MediaPipe Hands (Performance Optimized)
  */
 export const useHandTracking = (): HandTrackingResult => {
-  // Refs for video and canvas elements
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   
-  // State management
+  // Only essential state that drives UI re-renders
   const [isActive, setIsActive] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [gestureState, setGestureState] = useState<GestureState>({ type: 'none', confidence: 0 });
   const [logs, setLogs] = useState<string[]>([]);
   const [isInitialized, setIsInitialized] = useState(false);
-  const [currentGesture, setCurrentGesture] = useState('No gesture detected');
   const [error, setError] = useState<string | null>(null);
-  const [cursorPosition, setCursorPosition] = useState<CursorPosition>({ x: 0, y: 0, visible: false });
-  
-  // Mobile detection and performance state
   const [isMobile, setIsMobile] = useState(false);
-  const [performanceMetrics, setPerformanceMetrics] = useState<PerformanceMetrics>({
-    frameProcessingTime: 0,
-    averageProcessingTime: 0,
-    skippedFrames: 0,
-    processedFrames: 0
+
+  // Use refs for high-frequency updates (gesture, cursor, metrics) to avoid re-renders
+  const gestureStateRef = useRef<GestureState>({ type: 'none', confidence: 0 });
+  const cursorPositionRef = useRef<CursorPosition>({ x: 0, y: 0, visible: false });
+  const currentGestureRef = useRef('No gesture detected');
+  const performanceMetricsRef = useRef<PerformanceMetrics>({
+    frameProcessingTime: 0, averageProcessingTime: 0, skippedFrames: 0, processedFrames: 0
   });
-  
+
+  // Batched state for UI — updated at lower frequency
+  const [gestureState, setGestureState] = useState<GestureState>({ type: 'none', confidence: 0 });
+  const [cursorPosition, setCursorPosition] = useState<CursorPosition>({ x: 0, y: 0, visible: false });
+  const [currentGesture, setCurrentGesture] = useState('No gesture detected');
+  const [performanceMetrics, setPerformanceMetrics] = useState<PerformanceMetrics>({
+    frameProcessingTime: 0, averageProcessingTime: 0, skippedFrames: 0, processedFrames: 0
+  });
+
+  // UI sync timer — flush ref values to state at ~15fps for display
+  const uiSyncRAF = useRef<number | null>(null);
+  const lastUISyncRef = useRef(0);
+
+  const syncUIState = useCallback(() => {
+    const now = performance.now();
+    if (now - lastUISyncRef.current < 66) return; // ~15fps UI updates
+    lastUISyncRef.current = now;
+
+    const gs = gestureStateRef.current;
+    const cp = cursorPositionRef.current;
+    setGestureState(prev =>
+      prev.type !== gs.type || prev.confidence !== gs.confidence ? gs : prev
+    );
+    setCursorPosition(prev =>
+      prev.x !== cp.x || prev.y !== cp.y || prev.visible !== cp.visible ? { ...cp } : prev
+    );
+    setCurrentGesture(currentGestureRef.current);
+  }, []);
+
   // Refs for MediaPipe and gesture tracking
   const handsRef = useRef<any>(null);
   const cameraRef = useRef<any>(null);
@@ -90,172 +118,94 @@ export const useHandTracking = (): HandTrackingResult => {
   const scrollVelocityRef = useRef<number>(0);
   const scrollMomentumRAF = useRef<number | null>(null);
 
-  // Mobile device detection on hook initialization
+  // Cache screen dimensions (avoid reading every frame)
+  const screenDimsRef = useRef({ w: window.innerWidth, h: window.innerHeight });
+  useEffect(() => {
+    const update = () => { screenDimsRef.current = { w: window.innerWidth, h: window.innerHeight }; };
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, []);
+
+  // Mobile device detection
   useEffect(() => {
     const detectMobile = () => {
       const userAgent = navigator.userAgent.toLowerCase();
       const isMobileUA = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(userAgent);
       const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
       const isSmallScreen = window.innerWidth <= 768;
-      
       const mobile = isMobileUA || (isTouchDevice && isSmallScreen);
       setIsMobile(mobile);
-      
-      if (mobile) {
-        addLog('📱 Mobile device detected - Optimized settings enabled');
-        console.log('🚀 [HandTracking] Mobile device detected, using optimized settings');
-      } else {
-        addLog('💻 Desktop device detected - Standard settings enabled');
-        console.log('🚀 [HandTracking] Desktop device detected, using standard settings');
-      }
     };
-    
     detectMobile();
     window.addEventListener('resize', detectMobile);
     return () => window.removeEventListener('resize', detectMobile);
   }, []);
 
-  /**
-   * Updates performance metrics with frame processing times
-   */
-  const updatePerformanceMetrics = useCallback((processingTime: number, skipped: boolean = false) => {
-    if (skipped) {
-      // Use ref to avoid re-render on every skipped frame
-      return;
-    }
-
-    performanceTimesRef.current.push(processingTime);
-    if (performanceTimesRef.current.length > 30) {
-      performanceTimesRef.current.shift();
-    }
-
-    // Only update state every 30 frames to reduce re-renders
-    const count = performanceTimesRef.current.length;
-    if (count % 30 === 0) {
-      const avgTime = performanceTimesRef.current.reduce((a, b) => a + b, 0) / count;
-      setPerformanceMetrics({
-        frameProcessingTime: processingTime,
-        averageProcessingTime: avgTime,
-        skippedFrames: 0,
-        processedFrames: count
-      });
-    }
-  }, []);
   const addLog = useCallback((message: string) => {
     const timestamp = new Date().toLocaleTimeString();
     const logEntry = `[${timestamp}] ${message}`;
-    setLogs(prev => [...prev.slice(-4), logEntry]); // Keep only last 5 logs
+    setLogs(prev => [...prev.slice(-4), logEntry]);
   }, []);
 
   /**
-   * Counts extended fingers based on hand landmarks
-   * Uses landmark positions to determine finger states
+   * Fast finger counting — no optional chaining in hot path
    */
   const countExtendedFingers = useCallback((landmarks: any[]) => {
-    if (!landmarks || landmarks.length < 21) return 0;
-    
-    let extendedCount = 0;
-    
-    try {
-      // Thumb detection (compare x coordinates due to thumb orientation)
-      if (landmarks[4]?.x !== undefined && landmarks[3]?.x !== undefined && 
-          landmarks[4].x > landmarks[3].x) {
-        extendedCount++;
-      }
-      
-      // Other fingers (compare y coordinates, fingertip vs PIP joint)
-      const fingerTips = [8, 12, 16, 20]; // Index, Middle, Ring, Pinky fingertips
-      const fingerPIPs = [6, 10, 14, 18]; // Proximal Interphalangeal joints
-      
-      for (let i = 0; i < fingerTips.length; i++) {
-        const tipIndex = fingerTips[i];
-        const pipIndex = fingerPIPs[i];
-        
-        if (landmarks[tipIndex]?.y !== undefined && landmarks[pipIndex]?.y !== undefined &&
-            landmarks[tipIndex].y < landmarks[pipIndex].y) {
-          extendedCount++;
-        }
-      }
-    } catch (error) {
-      console.error('Error counting extended fingers:', error);
-      return 0;
+    let count = 0;
+    // Thumb
+    if (landmarks[4].x > landmarks[3].x) count++;
+    // Other fingers
+    for (let i = 0; i < 4; i++) {
+      if (landmarks[FINGER_TIPS[i]].y < landmarks[FINGER_PIPS[i]].y) count++;
     }
-    
-    return extendedCount;
+    return count;
   }, []);
 
-  /**
-   * Detects specific gestures based on extended finger count and positions
-   */
   const detectGesture = useCallback((landmarks: any[]) => {
     if (!landmarks || landmarks.length < 21) return 'unknown';
+    const extendedFingers = countExtendedFingers(landmarks);
     
-    try {
-      const extendedFingers = countExtendedFingers(landmarks);
-      
-      switch (extendedFingers) {
-        case 1: {
-          // Check if only index finger is extended (pointing gesture)
-          const indexUp = landmarks[8]?.y !== undefined && landmarks[6]?.y !== undefined && 
-                         landmarks[8].y < landmarks[6].y;
-          const middleFolded = landmarks[12]?.y !== undefined && landmarks[10]?.y !== undefined && 
-                              landmarks[12].y > landmarks[10].y;
-          if (indexUp && middleFolded) {
-            return 'pointing';
-          }
-          return 'scroll';
-        }
-        case 2: {
-          const indexExtended = landmarks[8]?.y !== undefined && landmarks[6]?.y !== undefined && 
-                               landmarks[8].y < landmarks[6].y;
-          const middleExtended = landmarks[12]?.y !== undefined && landmarks[10]?.y !== undefined && 
-                                landmarks[12].y < landmarks[10].y;
-          const ringFolded = landmarks[16]?.y !== undefined && landmarks[14]?.y !== undefined && 
-                            landmarks[16].y > landmarks[14].y;
-          const pinkyFolded = landmarks[20]?.y !== undefined && landmarks[18]?.y !== undefined && 
-                             landmarks[20].y > landmarks[18].y;
-          if (indexExtended && middleExtended && ringFolded && pinkyFolded) {
-            return 'peace';
-          }
-          return 'scroll';
-        }
-        default:
-          return 'scroll';
+    switch (extendedFingers) {
+      case 1: {
+        const indexUp = landmarks[8].y < landmarks[6].y;
+        const middleFolded = landmarks[12].y > landmarks[10].y;
+        return (indexUp && middleFolded) ? 'pointing' : 'scroll';
       }
-    } catch (error) {
-      console.error('Error detecting gesture:', error);
-      return 'unknown';
+      case 2: {
+        const indexExt = landmarks[8].y < landmarks[6].y;
+        const middleExt = landmarks[12].y < landmarks[10].y;
+        const ringFolded = landmarks[16].y > landmarks[14].y;
+        const pinkyFolded = landmarks[20].y > landmarks[18].y;
+        return (indexExt && middleExt && ringFolded && pinkyFolded) ? 'peace' : 'scroll';
+      }
+      default:
+        return 'scroll';
     }
   }, [countExtendedFingers]);
 
-  /**
-   * Handles gesture actions with cooldown mechanism for clicks
-   */
   const handleGesture = useCallback((gesture: string, landmarks?: any[]) => {
     const now = Date.now();
+    const screen = screenDimsRef.current;
     
     switch (gesture) {
       case 'scroll':
-        // Position-based scrolling using wrist (landmark 0) Y position
         if (landmarks && landmarks[0]) {
-          const currentY = landmarks[0].y; // 0 = top, 1 = bottom in camera
+          const currentY = landmarks[0].y;
           if (lastHandYRef.current !== null) {
             const delta = currentY - lastHandYRef.current;
-            // Dead zone to prevent micro-jitter from triggering scroll
             if (Math.abs(delta) > 0.008) {
               const scrollAmount = delta * 800;
-              scrollVelocityRef.current = scrollAmount; // Store velocity for momentum
+              scrollVelocityRef.current = scrollAmount;
               window.scrollBy({ top: scrollAmount });
-              setCurrentGesture(delta > 0 ? '👇 Scrolling DOWN' : '👆 Scrolling UP');
+              currentGestureRef.current = delta > 0 ? '👇 Scrolling DOWN' : '👆 Scrolling UP';
             }
           }
           lastHandYRef.current = currentY;
         }
-        setGestureState({ type: 'scroll', confidence: 0.9 });
+        gestureStateRef.current = { type: 'scroll', confidence: 0.9 };
         break;
 
       case 'pointing':
-        // Stop any scroll momentum when switching to pointing
         if (scrollMomentumRAF.current) {
           cancelAnimationFrame(scrollMomentumRAF.current);
           scrollMomentumRAF.current = null;
@@ -267,10 +217,10 @@ export const useHandTracking = (): HandTrackingResult => {
             handLostTimerRef.current = null;
           }
           cursorActivatedRef.current = true;
-          lastHandYRef.current = null; // Reset scroll baseline
-          // Map fingertip position to screen coordinates
-          const rawX = (1 - landmarks[8].x) * window.innerWidth;
-          const rawY = landmarks[8].y * window.innerHeight;
+          lastHandYRef.current = null;
+          
+          const rawX = (1 - landmarks[8].x) * screen.w;
+          const rawY = landmarks[8].y * screen.h;
 
           const prev = smoothCursorRef.current;
           const rawDist = Math.hypot(rawX - prev.x, rawY - prev.y);
@@ -279,10 +229,9 @@ export const useHandTracking = (): HandTrackingResult => {
           const smoothY = prev.y + (rawY - prev.y) * smoothing;
           smoothCursorRef.current = { x: smoothX, y: smoothY };
 
-          // Snap-to interactive element if cursor is close
+          // Snap-to interactive element
           let finalX = smoothX;
           let finalY = smoothY;
-          const snapRadius = 30;
           const elUnder = document.elementFromPoint(smoothX, smoothY);
           if (elUnder) {
             const interactive = elUnder.closest('button, a, [role="button"], input, select, textarea, [tabindex]');
@@ -291,209 +240,180 @@ export const useHandTracking = (): HandTrackingResult => {
               const cx = rect.left + rect.width / 2;
               const cy = rect.top + rect.height / 2;
               const dist = Math.hypot(smoothX - cx, smoothY - cy);
-              if (dist < snapRadius + Math.max(rect.width, rect.height) / 2) {
+              if (dist < 30 + Math.max(rect.width, rect.height) / 2) {
                 finalX = cx;
                 finalY = cy;
               }
             }
           }
 
-          setCursorPosition({ x: finalX, y: finalY, visible: true });
+          cursorPositionRef.current = { x: finalX, y: finalY, visible: true };
         }
-        setCurrentGesture('☝️ Pointing → Cursor Mode');
-        setGestureState({ type: 'pointing', confidence: 0.9 });
+        currentGestureRef.current = '☝️ Pointing → Cursor Mode';
+        gestureStateRef.current = { type: 'pointing', confidence: 0.9 };
         break;
         
       case 'peace':
-        // Keep cursor visible at last known position for accurate clicking
         if (now - lastClickTimeRef.current > 1000) {
-          setCurrentGesture('✌️ Peace sign detected → CLICK');
-          setGestureState({ type: 'peace', confidence: 0.9 });
+          currentGestureRef.current = '✌️ Peace sign detected → CLICK';
+          gestureStateRef.current = { type: 'peace', confidence: 0.9 };
           addLog('Peace sign gesture detected - Clicking element under cursor');
-          // Click the element under the cursor's last known position
-          setCursorPosition(prev => {
-            if (prev.visible) {
-              const el = document.elementFromPoint(prev.x, prev.y) as HTMLElement;
-              if (el) {
-                el.click();
-                addLog(`Clicked element: <${el.tagName.toLowerCase()}>`);
-              }
+          const cp = cursorPositionRef.current;
+          if (cp.visible) {
+            const el = document.elementFromPoint(cp.x, cp.y) as HTMLElement;
+            if (el) {
+              el.click();
+              addLog(`Clicked element: <${el.tagName.toLowerCase()}>`);
             }
-            return prev; // Keep cursor as-is
-          });
+          }
           lastClickTimeRef.current = now;
         } else {
-          setCurrentGesture('✌️ Peace sign detected → CLICK (cooldown)');
-          setGestureState({ type: 'peace', confidence: 0.5 });
+          currentGestureRef.current = '✌️ Peace sign detected → CLICK (cooldown)';
+          gestureStateRef.current = { type: 'peace', confidence: 0.5 };
         }
         break;
         
       default:
-        setCurrentGesture('👋 Hand detected → No action');
-        setGestureState({ type: 'none', confidence: 0 });
+        currentGestureRef.current = '👋 Hand detected → No action';
+        gestureStateRef.current = { type: 'none', confidence: 0 };
     }
   }, [addLog]);
 
   /**
-   * Processes MediaPipe results and draws hand landmarks (mobile optimized with frame skipping)
+   * Optimized frame processor — minimal allocations, batched UI updates
    */
   const onResults = useCallback((results: any) => {
     const frameStartTime = performance.now();
     
-    // Mobile optimization: Skip every 3rd frame only (process 2 of 3)
+    // Frame skipping
     if (isMobile) {
       frameSkipCounterRef.current++;
-      if (frameSkipCounterRef.current % 3 === 0) {
-        return;
-      }
+      if (frameSkipCounterRef.current % 3 === 0) return;
     }
     
-    // Desktop: 30 FPS target (33ms) for smoother tracking
+    // Desktop: 30 FPS target
     const now = performance.now();
-    if (!isMobile && now - frameThrottleRef.current < 33) {
-      return;
-    }
+    if (!isMobile && now - frameThrottleRef.current < 33) return;
     frameThrottleRef.current = now;
+    
     if (!canvasRef.current || !videoRef.current) return;
     
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     
-    try {
-      // Clear canvas and draw video frame
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      
-      // Safely draw video frame when ready
-      if (videoRef.current.readyState >= 2) {
-        ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-      }
-      
-      if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-        const landmarks = results.multiHandLandmarks[0];
-        
-        // Validate landmarks array
-        if (!landmarks || landmarks.length < 21) {
-          setCurrentGesture('Invalid hand data');
-          setGestureState({ type: 'none', confidence: 0 });
-          return;
-        }
-        
-        // Draw hand landmarks with red dots
-        ctx.fillStyle = '#FF0000';
-        ctx.strokeStyle = '#00FF00';
-        ctx.lineWidth = 2;
-        
-        // Draw landmarks with bounds checking
-        landmarks.forEach((landmark: any) => {
-          if (!landmark || typeof landmark.x !== 'number' || typeof landmark.y !== 'number') return;
-          
-          const x = Math.max(0, Math.min(landmark.x * canvas.width, canvas.width));
-          const y = Math.max(0, Math.min(landmark.y * canvas.height, canvas.height));
-          
-          ctx.beginPath();
-          ctx.arc(x, y, 5, 0, 2 * Math.PI);
-          ctx.fill();
-        });
-        
-        // Draw hand skeleton connections
-        const connections = [
-          [0, 1], [1, 2], [2, 3], [3, 4], // Thumb
-          [0, 5], [5, 6], [6, 7], [7, 8], // Index
-          [0, 9], [9, 10], [10, 11], [11, 12], // Middle
-          [0, 13], [13, 14], [14, 15], [15, 16], // Ring
-          [0, 17], [17, 18], [18, 19], [19, 20], // Pinky
-          [5, 9], [9, 13], [13, 17] // Palm connections
-        ];
-        
-        connections.forEach(([start, end]) => {
-          if (start >= landmarks.length || end >= landmarks.length) return;
-          
-          const startPoint = landmarks[start];
-          const endPoint = landmarks[end];
-          
-          if (!startPoint || !endPoint || 
-              typeof startPoint.x !== 'number' || typeof startPoint.y !== 'number' ||
-              typeof endPoint.x !== 'number' || typeof endPoint.y !== 'number') return;
-          
-          ctx.beginPath();
-          ctx.moveTo(
-            Math.max(0, Math.min(startPoint.x * canvas.width, canvas.width)), 
-            Math.max(0, Math.min(startPoint.y * canvas.height, canvas.height))
-          );
-          ctx.lineTo(
-            Math.max(0, Math.min(endPoint.x * canvas.width, canvas.width)), 
-            Math.max(0, Math.min(endPoint.y * canvas.height, canvas.height))
-          );
-          ctx.stroke();
-        });
-        
-        // Cancel hand-lost timer since hand is detected
-        if (handLostTimerRef.current) {
-          clearTimeout(handLostTimerRef.current);
-          handLostTimerRef.current = null;
-        }
-        
-        // Detect and handle gesture
-        const gesture = detectGesture(landmarks);
-        // For pointing and scroll, always update every frame with landmarks
-        if (gesture === 'pointing' || gesture === 'scroll') {
-          handleGesture(gesture, landmarks);
-        } else if (gesture !== lastGestureRef.current) {
-          handleGesture(gesture, landmarks);
-        }
-        lastGestureRef.current = gesture;
-      } else {
-        // Hand lost — apply scroll momentum if last gesture was scroll
-        if (lastGestureRef.current === 'scroll' && Math.abs(scrollVelocityRef.current) > 1) {
-          // Start momentum deceleration loop
-          if (!scrollMomentumRAF.current) {
-            const decelerate = () => {
-              scrollVelocityRef.current *= 0.92; // Friction
-              if (Math.abs(scrollVelocityRef.current) > 0.5) {
-                window.scrollBy({ top: scrollVelocityRef.current });
-                scrollMomentumRAF.current = requestAnimationFrame(decelerate);
-              } else {
-                scrollVelocityRef.current = 0;
-                scrollMomentumRAF.current = null;
-                lastHandYRef.current = null;
-              }
-            };
-            scrollMomentumRAF.current = requestAnimationFrame(decelerate);
-          }
-        }
-
-        // Cursor hide with delay
-        if (cursorActivatedRef.current && !handLostTimerRef.current) {
-          handLostTimerRef.current = setTimeout(() => {
-            setCursorPosition(prev => ({ ...prev, visible: false }));
-            cursorActivatedRef.current = false;
-            handLostTimerRef.current = null;
-          }, 3000);
-        }
-        setCurrentGesture('No hand detected');
-        setGestureState({ type: 'none', confidence: 0 });
-      }
-      
-      // Calculate and log frame processing time
-      const processingTime = performance.now() - frameStartTime;
-      updatePerformanceMetrics(processingTime);
-      
-      // Mobile performance logging (less frequent to avoid spam)
-      if (isMobile && performanceMetrics.processedFrames % 30 === 0) {
-        console.log(`📊 [HandTracking Mobile] Average processing: ${performanceMetrics.averageProcessingTime.toFixed(1)}ms, Skipped: ${performanceMetrics.skippedFrames}`);
-      }
-      
-    } catch (error) {
-      console.error('Error in onResults:', error);
-      setCurrentGesture('Rendering error');
-      setGestureState({ type: 'none', confidence: 0 });
-      updatePerformanceMetrics(performance.now() - frameStartTime);
+    // Clear and draw video
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (videoRef.current.readyState >= 2) {
+      ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
     }
-  }, [detectGesture, handleGesture, isMobile, updatePerformanceMetrics, performanceMetrics]);
+    
+    if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+      const landmarks = results.multiHandLandmarks[0];
+      if (!landmarks || landmarks.length < 21) return;
+      
+      // Draw landmarks — batch fill calls
+      const cw = canvas.width;
+      const ch = canvas.height;
+      
+      ctx.fillStyle = '#FF0000';
+      ctx.beginPath();
+      for (let i = 0; i < landmarks.length; i++) {
+        const lm = landmarks[i];
+        const x = lm.x * cw;
+        const y = lm.y * ch;
+        ctx.moveTo(x + 4, y);
+        ctx.arc(x, y, 4, 0, 6.283);
+      }
+      ctx.fill();
+      
+      // Draw skeleton — single path
+      ctx.strokeStyle = '#00FF00';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      for (let i = 0; i < HAND_CONNECTIONS.length; i++) {
+        const [s, e] = HAND_CONNECTIONS[i];
+        const sp = landmarks[s];
+        const ep = landmarks[e];
+        ctx.moveTo(sp.x * cw, sp.y * ch);
+        ctx.lineTo(ep.x * cw, ep.y * ch);
+      }
+      ctx.stroke();
+      
+      // Cancel hand-lost timer
+      if (handLostTimerRef.current) {
+        clearTimeout(handLostTimerRef.current);
+        handLostTimerRef.current = null;
+      }
+      
+      // Detect and handle gesture
+      const gesture = detectGesture(landmarks);
+      if (gesture === 'pointing' || gesture === 'scroll') {
+        handleGesture(gesture, landmarks);
+      } else if (gesture !== lastGestureRef.current) {
+        handleGesture(gesture, landmarks);
+      }
+      lastGestureRef.current = gesture;
+    } else {
+      // Hand lost — momentum scrolling
+      if (lastGestureRef.current === 'scroll' && Math.abs(scrollVelocityRef.current) > 1) {
+        if (!scrollMomentumRAF.current) {
+          const decelerate = () => {
+            scrollVelocityRef.current *= 0.92;
+            if (Math.abs(scrollVelocityRef.current) > 0.5) {
+              window.scrollBy({ top: scrollVelocityRef.current });
+              scrollMomentumRAF.current = requestAnimationFrame(decelerate);
+            } else {
+              scrollVelocityRef.current = 0;
+              scrollMomentumRAF.current = null;
+              lastHandYRef.current = null;
+            }
+          };
+          scrollMomentumRAF.current = requestAnimationFrame(decelerate);
+        }
+      }
+
+      // Cursor hide with delay
+      if (cursorActivatedRef.current && !handLostTimerRef.current) {
+        handLostTimerRef.current = setTimeout(() => {
+          cursorPositionRef.current = { ...cursorPositionRef.current, visible: false };
+          cursorActivatedRef.current = false;
+          handLostTimerRef.current = null;
+        }, 3000);
+      }
+      currentGestureRef.current = 'No hand detected';
+      gestureStateRef.current = { type: 'none', confidence: 0 };
+    }
+    
+    // Performance tracking (ref-only, no state)
+    const processingTime = performance.now() - frameStartTime;
+    performanceTimesRef.current.push(processingTime);
+    if (performanceTimesRef.current.length > 30) performanceTimesRef.current.shift();
+    
+    // Sync refs → state for UI
+    syncUIState();
+  }, [detectGesture, handleGesture, isMobile, syncUIState]);
+
+  // Update performance metrics state at low frequency
+  useEffect(() => {
+    if (!isActive) return;
+    const interval = setInterval(() => {
+      const times = performanceTimesRef.current;
+      if (times.length > 0) {
+        const avg = times.reduce((a, b) => a + b, 0) / times.length;
+        setPerformanceMetrics({
+          frameProcessingTime: times[times.length - 1],
+          averageProcessingTime: avg,
+          skippedFrames: 0,
+          processedFrames: times.length
+        });
+      }
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [isActive]);
 
   /**
-   * Initializes MediaPipe Hands and camera with comprehensive error handling
+   * Initializes MediaPipe Hands and camera
    */
   const initializeHandTracking = useCallback(async () => {
     try {
@@ -501,21 +421,18 @@ export const useHandTracking = (): HandTrackingResult => {
       setIsLoading(true);
       addLog('Initializing hand tracking...');
       
-      // Wait for DOM elements to be ready
       await new Promise(resolve => setTimeout(resolve, 300));
       
       if (!videoRef.current || !canvasRef.current) {
         throw new Error('Video or canvas element not found - DOM elements not ready');
       }
       
-      // Check browser camera support
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         throw new Error('Camera access not supported in this browser');
       }
       
       addLog('Loading MediaPipe libraries (CDN)...');
       
-      // Load MediaPipe via script tags to avoid bundler constructor issues
       const loadScript = (src: string) =>
         new Promise<void>((resolve, reject) => {
           if (document.querySelector(`script[src="${src}"]`)) return resolve();
@@ -534,68 +451,47 @@ export const useHandTracking = (): HandTrackingResult => {
       
       addLog('MediaPipe libraries loaded successfully');
       
-      // Initialize MediaPipe Hands using global constructor
       let hands;
       try {
         hands = new (window as any).Hands({
           locateFile: (file: string) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`,
         });
       } catch (constructorError: any) {
-        console.error('Hands constructor error (CDN):', constructorError, { globalHands: (window as any).Hands });
         throw new Error(`Failed to create Hands instance: ${constructorError?.message || constructorError}`);
       }
       
-      // Configure hand detection settings
-      // Configure hand detection settings based on device type
-      const mobileSettings = {
-        maxNumHands: 1,
-        modelComplexity: 0,
-        minDetectionConfidence: 0.4,
-        minTrackingConfidence: 0.25
-      };
+      const settings = isMobile
+        ? { maxNumHands: 1, modelComplexity: 0, minDetectionConfidence: 0.4, minTrackingConfidence: 0.25 }
+        : { maxNumHands: 1, modelComplexity: 0, minDetectionConfidence: 0.45, minTrackingConfidence: 0.3 };
       
-      const desktopSettings = {
-        maxNumHands: 1,
-        modelComplexity: 0,
-        minDetectionConfidence: 0.45,
-        minTrackingConfidence: 0.3
-      };
-      
-      const settings = isMobile ? mobileSettings : desktopSettings;
       hands.setOptions(settings);
-      
       addLog(`🎯 Applied ${isMobile ? 'mobile' : 'desktop'} optimized settings`);
-      console.log(`🎯 [HandTracking] Applied settings:`, settings);
       
       hands.onResults(onResults);
       handsRef.current = hands;
       
       addLog('Initializing camera...');
       
-      // Initialize camera with mobile-optimized settings
-      const cameraSettings = {
+      const camW = isMobile ? 320 : 480;
+      const camH = isMobile ? 240 : 360;
+      
+      const camera = new (window as any).Camera(videoRef.current, {
         onFrame: async () => {
           try {
             if (handsRef.current && videoRef.current && videoRef.current.readyState >= 2) {
               await handsRef.current.send({ image: videoRef.current });
             }
           } catch (frameError) {
-            console.error('Error processing frame:', frameError);
+            // Silently handle frame errors to avoid console spam
           }
         },
-        // Mobile-optimized resolution: 640x480 max, 480x360 for mobile
-        width: isMobile ? 320 : 480,
-        height: isMobile ? 240 : 360
-      };
+        width: camW,
+        height: camH
+      });
       
-      const camera = new (window as any).Camera(videoRef.current, cameraSettings);
-      
-      addLog(`📹 Camera initialized: ${cameraSettings.width}x${cameraSettings.height} ${isMobile ? '(mobile)' : '(desktop)'}`);
-      console.log(`📹 [HandTracking] Camera settings:`, cameraSettings);
-      
+      addLog(`📹 Camera initialized: ${camW}x${camH}`);
       cameraRef.current = camera;
       
-      // Start camera with timeout protection
       const cameraStartPromise = camera.start();
       const timeoutPromise = new Promise((_, reject) => 
         setTimeout(() => reject(new Error('Camera initialization timeout')), 10000)
@@ -607,7 +503,6 @@ export const useHandTracking = (): HandTrackingResult => {
       setIsActive(true);
       setIsLoading(false);
       addLog('✅ Hand tracking initialized successfully');
-      console.log(`✅ [HandTracking] Initialized successfully for ${isMobile ? 'mobile' : 'desktop'} device`);
       
     } catch (err) {
       console.error('Failed to initialize hand tracking:', err);
@@ -626,11 +521,8 @@ export const useHandTracking = (): HandTrackingResult => {
       setIsLoading(false);
       addLog(`❌ Error: ${errorMessage}`);
     }
-  }, [onResults, addLog, isMobile, updatePerformanceMetrics]);
+  }, [onResults, addLog, isMobile]);
 
-  /**
-   * Starts hand tracking (initializes if needed)
-   */
   const startHandTracking = useCallback(async () => {
     if (!isInitialized) {
       await initializeHandTracking();
@@ -641,30 +533,23 @@ export const useHandTracking = (): HandTrackingResult => {
     }
   }, [isInitialized, initializeHandTracking, addLog]);
 
-  /**
-   * Stops hand tracking and camera
-   */
   const stopHandTracking = useCallback(() => {
     if (cameraRef.current) {
       cameraRef.current.stop();
       setIsActive(false);
+      gestureStateRef.current = { type: 'none', confidence: 0 };
       setGestureState({ type: 'none', confidence: 0 });
       addLog('Hand tracking stopped');
     }
   }, [addLog]);
 
-  // Cleanup on component unmount
+  // Cleanup on unmount
   useEffect(() => {
     return () => {
-      if (cameraRef.current) {
-        cameraRef.current.stop();
-      }
-      if (handLostTimerRef.current) {
-        clearTimeout(handLostTimerRef.current);
-      }
-      if (scrollMomentumRAF.current) {
-        cancelAnimationFrame(scrollMomentumRAF.current);
-      }
+      if (cameraRef.current) cameraRef.current.stop();
+      if (handLostTimerRef.current) clearTimeout(handLostTimerRef.current);
+      if (scrollMomentumRAF.current) cancelAnimationFrame(scrollMomentumRAF.current);
+      if (uiSyncRAF.current) cancelAnimationFrame(uiSyncRAF.current);
     };
   }, []);
 
