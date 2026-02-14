@@ -84,6 +84,8 @@ export const useHandTracking = (): HandTrackingResult => {
   const frameSkipCounterRef = useRef<number>(0);
   const performanceTimesRef = useRef<number[]>([]);
   const smoothCursorRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const cursorActivatedRef = useRef(false);
+  const handLostTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Mobile device detection on hook initialization
   useEffect(() => {
@@ -256,6 +258,12 @@ export const useHandTracking = (): HandTrackingResult => {
 
       case 'pointing':
         if (landmarks && landmarks[8]) {
+          // Cancel any pending hide timer since hand is back
+          if (handLostTimerRef.current) {
+            clearTimeout(handLostTimerRef.current);
+            handLostTimerRef.current = null;
+          }
+          cursorActivatedRef.current = true;
           // Map fingertip position to screen coordinates
           const rawX = (1 - landmarks[8].x) * window.innerWidth;
           const rawY = landmarks[8].y * window.innerHeight;
@@ -418,6 +426,12 @@ export const useHandTracking = (): HandTrackingResult => {
           ctx.stroke();
         });
         
+        // Cancel hand-lost timer since hand is detected
+        if (handLostTimerRef.current) {
+          clearTimeout(handLostTimerRef.current);
+          handLostTimerRef.current = null;
+        }
+        
         // Detect and handle gesture
         const gesture = detectGesture(landmarks);
         // For pointing, always update cursor even if gesture hasn't changed
@@ -428,8 +442,14 @@ export const useHandTracking = (): HandTrackingResult => {
         }
         lastGestureRef.current = gesture;
       } else {
-        // Keep cursor visible - only hide when hand is completely gone for a while
-        setCursorPosition(prev => ({ ...prev, visible: false }));
+        // Hand lost — start a delayed hide (3 seconds) so cursor persists through brief drops
+        if (cursorActivatedRef.current && !handLostTimerRef.current) {
+          handLostTimerRef.current = setTimeout(() => {
+            setCursorPosition(prev => ({ ...prev, visible: false }));
+            cursorActivatedRef.current = false;
+            handLostTimerRef.current = null;
+          }, 3000);
+        }
         setCurrentGesture('No hand detected');
         setGestureState({ type: 'none', confidence: 0 });
       }
@@ -617,6 +637,9 @@ export const useHandTracking = (): HandTrackingResult => {
     return () => {
       if (cameraRef.current) {
         cameraRef.current.stop();
+      }
+      if (handLostTimerRef.current) {
+        clearTimeout(handLostTimerRef.current);
       }
     };
   }, []);
