@@ -1,4 +1,4 @@
-import { useConversation } from '@11labs/react';
+import { useConversation } from '@elevenlabs/react';
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { useFeatureToggle } from '@/contexts/FeatureToggleContext';
