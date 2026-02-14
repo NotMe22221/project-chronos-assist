@@ -1,5 +1,5 @@
 import { useConversation } from '@elevenlabs/react';
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { useFeatureToggle } from '@/contexts/FeatureToggleContext';
 
@@ -16,7 +16,6 @@ export const useVoiceAssistant = () => {
   const [messages, setMessages] = useState<ConversationMessage[]>([
     { id: '1', text: 'JARVIS online. Voice and gesture control ready.', timestamp: new Date(), type: 'ai' },
   ]);
-  const [isConnected, setIsConnected] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const { toast } = useToast();
   const { processVoiceCommand, features } = useFeatureToggle();
@@ -49,12 +48,10 @@ export const useVoiceAssistant = () => {
       },
     },
     onConnect: () => {
-      setIsConnected(true);
       setIsConnecting(false);
       toast({ title: 'JARVIS Connected', description: 'Voice assistant is active' });
     },
     onDisconnect: () => {
-      setIsConnected(false);
       setIsConnecting(false);
     },
     onMessage: (message) => {
@@ -63,10 +60,10 @@ export const useVoiceAssistant = () => {
       let text = '';
       let type: 'user' | 'ai' = 'ai';
 
-      if ('message' in message && typeof message.message === 'string') text = message.message;
-      else if ('text' in message && typeof message.text === 'string') text = message.text;
+      if ('message' in message && typeof (message as any).message === 'string') text = (message as any).message;
+      else if ('text' in message && typeof (message as any).text === 'string') text = (message as any).text;
 
-      if ('source' in message) type = message.source === 'user' ? 'user' : 'ai';
+      if ('source' in message) type = (message as any).source === 'user' ? 'user' : 'ai';
 
       if (!text.trim()) return;
 
@@ -87,6 +84,8 @@ export const useVoiceAssistant = () => {
       });
     },
   });
+
+  const isConnected = conversation.status === 'connected';
 
   const startConversation = useCallback(async () => {
     setIsConnecting(true);
