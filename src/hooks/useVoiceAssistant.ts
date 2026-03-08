@@ -47,6 +47,10 @@ export const useVoiceAssistant = () => {
         processVoiceCommand('stop talking');
         return 'Voice responses disabled.';
       },
+      disconnectCall: () => {
+        setPendingDisconnect(true);
+        return 'Goodbye! Disconnecting now.';
+      },
     },
     onConnect: () => {
       setIsConnecting(false);
