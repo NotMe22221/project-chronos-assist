@@ -51,6 +51,11 @@ export const useVoiceAssistant = () => {
         setPendingDisconnect(true);
         return 'Goodbye! Disconnecting now.';
       },
+      openWebsite: (params: { url: string }) => {
+        const url = params.url.startsWith('http') ? params.url : `https://${params.url}`;
+        window.open(url, '_blank');
+        return `Opening ${url}`;
+      },
     },
     onConnect: () => {
       setIsConnecting(false);
