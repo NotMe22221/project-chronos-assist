@@ -84,13 +84,13 @@ export const useHandTracking = (): HandTrackingResult => {
     frameProcessingTime: 0, averageProcessingTime: 0, skippedFrames: 0, processedFrames: 0
   });
 
-  // UI sync timer — flush ref values to state at ~15fps for display
+  // UI sync timer — flush ref values to state at ~30fps for smoother cursor
   const uiSyncRAF = useRef<number | null>(null);
   const lastUISyncRef = useRef(0);
 
   const syncUIState = useCallback(() => {
     const now = performance.now();
-    if (now - lastUISyncRef.current < 66) return; // ~15fps UI updates
+    if (now - lastUISyncRef.current < 33) return; // ~30fps UI updates
     lastUISyncRef.current = now;
 
     const gs = gestureStateRef.current;
