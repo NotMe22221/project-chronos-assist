@@ -94,6 +94,11 @@ export const useVoiceAssistant = () => {
         if (!relayed) window.open(url, '_blank');
         return `Opening ${url}`;
       },
+      reloadPage: () => {
+        const relayed = postBrowserAction({ kind: 'reload_page' });
+        if (!relayed) window.location.reload();
+        return 'Reloading the page.';
+      },
       getWeather: async (params: { city: string }) => {
         try {
           return await fetchWeatherSummary(params?.city || '');
