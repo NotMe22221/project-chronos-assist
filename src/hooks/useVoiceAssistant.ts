@@ -56,6 +56,35 @@ export const useVoiceAssistant = () => {
         window.open(url, '_blank');
         return `Opening ${url}`;
       },
+      getWeather: async (params: { city: string }) => {
+        const city = (params?.city || '').trim();
+        if (!city) return 'Please provide a city name.';
+
+        try {
+          const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+          const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+
+          const response = await fetch(`${supabaseUrl}/functions/v1/get-weather`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              apikey: supabaseKey,
+              Authorization: `Bearer ${supabaseKey}`,
+            },
+            body: JSON.stringify({ city }),
+          });
+
+          const data = await response.json();
+          if (!response.ok) {
+            return data?.error ? `Weather lookup failed: ${data.error}` : 'Weather lookup failed.';
+          }
+
+          return `Current weather in ${data.city}, ${data.country}: ${Math.round(data.temperature)}°C, ${data.description}. Feels like ${Math.round(data.feels_like)}°C with ${data.humidity}% humidity.`;
+        } catch (error) {
+          console.error('getWeather client tool error:', error);
+          return 'I could not retrieve weather data right now.';
+        }
+      },
     },
     onConnect: () => {
       setIsConnecting(false);
