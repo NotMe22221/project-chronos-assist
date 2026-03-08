@@ -14,15 +14,22 @@ serve(async (req) => {
   try {
     const { task, pageContext, history } = await req.json();
 
+    // Extract screenshot if present
+    const screenshot = pageContext?.screenshot;
+    if (pageContext?.screenshot) {
+      delete pageContext.screenshot;
+    }
+
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
 
-    const systemPrompt = `You are JARVIS, a browser automation assistant. You analyze a webpage's visible elements and decide the SINGLE next action to accomplish the user's task.
+    const systemPrompt = `You are JARVIS, a browser automation assistant WITH VISION capabilities. You analyze a webpage's visible elements alongside a screenshot of the page to decide the SINGLE next action to accomplish the user's task.
 
 You receive:
 - "task": The user's goal (e.g. "open my latest GitHub repository")
 - "pageContext": An object with { url, title, elements[] } where elements are clickable/interactive items on the page with { index, tag, text, type, href, selector }
 - "history": Array of previous actions taken
+- The user prompt also includes a screenshot of the current page.
 
 You MUST respond by calling the "next_action" tool with ONE of these action types:
 - { action: "click", selector: "<css selector>", description: "<what this click does>" }
@@ -35,6 +42,7 @@ You MUST respond by calling the "next_action" tool with ONE of these action type
 
 Rules:
 - Pick the MOST SPECIFIC selector possible. Prefer selectors with unique text content or attributes.
+- Use the screenshot to understand the layout and find the right elements, even if their text is ambiguous.
 - If the target element isn't visible, scroll down or navigate.
 - If you need to log in first, say so in the description.
 - Be conservative: one step at a time.
@@ -55,7 +63,13 @@ Rules:
             { role: "system", content: systemPrompt },
             {
               role: "user",
-              content: JSON.stringify({ task, pageContext, history }),
+              content: [
+                { type: "text", text: JSON.stringify({ task, pageContext, history }) },
+                ...(screenshot ? [{
+                  type: "image_url",
+                  image_url: { url: screenshot }
+                }] : [])
+              ]
             },
           ],
           tools: [
