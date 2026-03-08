@@ -398,6 +398,8 @@ export const useHandTracking = (): HandTrackingResult => {
           cursorPositionRef.current = { ...cursorPositionRef.current, visible: false };
           cursorActivatedRef.current = false;
           handLostTimerRef.current = null;
+          // Tell extension to hide cursor
+          postToParent({ gesture: 'hide' });
         }, 3000);
       }
       currentGestureRef.current = 'No hand detected';
