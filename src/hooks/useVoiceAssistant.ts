@@ -152,6 +152,7 @@ export const useVoiceAssistant = () => {
   });
 
   const isConnected = conversation.status === 'connected';
+  conversationRef.current = conversation;
 
   const startConversation = useCallback(async () => {
     setIsConnecting(true);
