@@ -155,6 +155,13 @@ export const useVoiceAssistant = () => {
             ...prev,
             { id: `${Date.now()}-ytopensearch`, text: `Opening YouTube and searching for ${query}.`, timestamp: new Date(), type: 'ai' },
           ]);
+        } else if (/\breload\b.*\bpage\b|\brefresh\b.*\bpage\b|\breload\b.*\btab\b|\brefresh\b.*\btab\b/i.test(text)) {
+          const relayed = postBrowserAction({ kind: 'reload_page' });
+          if (!relayed) window.location.reload();
+          setMessages((prev) => [
+            ...prev,
+            { id: `${Date.now()}-reload`, text: 'Reloading the page.', timestamp: new Date(), type: 'ai' },
+          ]);
         } else {
           const openMatch = text.match(/\bopen\s+(.+)/i);
           if (openMatch) {
