@@ -51,6 +51,7 @@ export const useVoiceAssistant = () => {
       if (window.parent !== window) {
         window.parent.postMessage({ type: 'jarvis-agent-task', task }, '*');
         setAgentRunning(true);
+        agentRunningRef.current = true;
         return true;
       }
     } catch (_) { /* no-op */ }
