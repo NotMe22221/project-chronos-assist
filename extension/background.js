@@ -28,12 +28,34 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       if (tabs[0]?.id) {
         chrome.tabs.sendMessage(tabs[0].id, {
           action: 'hand_gesture',
-          data: message.data
+          data: message.data,
         }).catch(() => {
-          // Content script not injected on this tab — ignore
+          // Content script unavailable on this tab
         });
       }
     });
     return false;
+  }
+
+  // Run browser actions in extension context (avoids iframe popup blocking)
+  if (message.action === 'browser_action') {
+    const { kind, url, query } = message.data || {};
+
+    if (kind === 'open_url' && url) {
+      chrome.tabs.create({ url });
+      return false;
+    }
+
+    if (kind === 'youtube_search' && query) {
+      const ytUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
+      chrome.tabs.create({ url: ytUrl });
+      return false;
+    }
+
+    if (kind === 'google_search' && query) {
+      const gUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}`;
+      chrome.tabs.create({ url: gUrl });
+      return false;
+    }
   }
 });
