@@ -1,13 +1,12 @@
 chrome.runtime.onInstalled.addListener(() => {
   console.log('JARVIS Voice Assistant extension installed');
   
-  // Enable side panel to open on action click
   chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: false })
     .catch(e => console.error('Side panel setup error:', e));
 });
 
-// Listen for messages from popup to open side panel
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  // Open side panel
   if (message.action === 'open_side_panel') {
     chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
       if (tabs[0]) {
@@ -20,6 +19,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         }
       }
     });
-    return true; // Keep message channel open for async response
+    return true;
+  }
+
+  // Relay hand tracking data from side panel to active tab's content script
+  if (message.action === 'hand_tracking_data') {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      if (tabs[0]?.id) {
+        chrome.tabs.sendMessage(tabs[0].id, {
+          action: 'hand_gesture',
+          data: message.data
+        }).catch(() => {
+          // Content script not injected on this tab — ignore
+        });
+      }
+    });
+    return false;
   }
 });

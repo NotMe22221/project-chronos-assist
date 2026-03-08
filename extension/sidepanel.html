@@ -16,9 +16,22 @@
 </head>
 <body>
   <iframe 
+    id="jarvis-frame"
     src="https://project-chronos-assist.lovable.app" 
     allow="camera *; microphone *; autoplay *; display-capture *"
     sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals"
   ></iframe>
+
+  <script>
+    // Relay hand tracking data from JARVIS iframe to background script → content script
+    window.addEventListener('message', (event) => {
+      if (event.data && event.data.type === 'jarvis-hand-tracking') {
+        chrome.runtime.sendMessage({
+          action: 'hand_tracking_data',
+          data: event.data
+        });
+      }
+    });
+  </script>
 </body>
 </html>

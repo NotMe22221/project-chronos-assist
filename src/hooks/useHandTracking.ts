@@ -185,6 +185,15 @@ export const useHandTracking = (): HandTrackingResult => {
     }
   }, [countExtendedFingers]);
 
+  // Post hand data to parent frame (for Chrome extension side panel)
+  const postToParent = useCallback((data: any) => {
+    try {
+      if (window.parent !== window) {
+        window.parent.postMessage({ type: 'jarvis-hand-tracking', ...data }, '*');
+      }
+    } catch (_) { /* cross-origin safe */ }
+  }, []);
+
   const handleGesture = useCallback((gesture: string, landmarks?: any[]) => {
     const now = Date.now();
     const screen = screenDimsRef.current;
@@ -197,9 +206,10 @@ export const useHandTracking = (): HandTrackingResult => {
             const delta = currentY - lastHandYRef.current;
             if (Math.abs(delta) > 0.005) {
               const targetVelocity = delta * 1000;
-              // Smooth velocity transition for less jerky scrolling
               scrollVelocityRef.current = scrollVelocityRef.current * 0.6 + targetVelocity * 0.4;
               window.scrollBy({ top: scrollVelocityRef.current });
+              // Relay scroll to parent/extension
+              postToParent({ gesture: 'scroll', velocity: scrollVelocityRef.current });
               currentGestureRef.current = delta > 0 ? '👇 Scrolling DOWN' : '👆 Scrolling UP';
             }
           }
@@ -225,20 +235,16 @@ export const useHandTracking = (): HandTrackingResult => {
           const rawX = (1 - landmarks[8].x) * screen.w;
           const rawY = landmarks[8].y * screen.h;
 
-          // Velocity-adaptive smoothing: fast movements get less smoothing for responsiveness,
-          // slow movements get more smoothing for precision
           const prev = smoothCursorRef.current;
           const prevRaw = prevRawCursorRef.current;
           const velocity = Math.hypot(rawX - prevRaw.x, rawY - prevRaw.y);
           prevRawCursorRef.current = { x: rawX, y: rawY };
           
-          // Adaptive lerp: 0.15 for tiny movements (stable), 0.6 for fast sweeps (responsive)
           const smoothing = Math.min(0.6, Math.max(0.15, velocity / 200));
           const smoothX = prev.x + (rawX - prev.x) * smoothing;
           const smoothY = prev.y + (rawY - prev.y) * smoothing;
           smoothCursorRef.current = { x: smoothX, y: smoothY };
 
-          // Snap-to interactive element
           let finalX = smoothX;
           let finalY = smoothY;
           const elUnder = document.elementFromPoint(smoothX, smoothY);
@@ -257,6 +263,13 @@ export const useHandTracking = (): HandTrackingResult => {
           }
 
           cursorPositionRef.current = { x: finalX, y: finalY, visible: true };
+          // Relay normalized cursor position to parent/extension
+          postToParent({
+            gesture: 'pointing',
+            normalizedX: 1 - landmarks[8].x,
+            normalizedY: landmarks[8].y,
+            visible: true,
+          });
         }
         currentGestureRef.current = '☝️ Pointing → Cursor Mode';
         gestureStateRef.current = { type: 'pointing', confidence: 0.9 };
@@ -275,6 +288,8 @@ export const useHandTracking = (): HandTrackingResult => {
               addLog(`Clicked element: <${el.tagName.toLowerCase()}>`);
             }
           }
+          // Relay click to parent/extension
+          postToParent({ gesture: 'click' });
           lastClickTimeRef.current = now;
         } else {
           currentGestureRef.current = '✌️ Peace sign detected → CLICK (cooldown)';
@@ -286,7 +301,7 @@ export const useHandTracking = (): HandTrackingResult => {
         currentGestureRef.current = '👋 Hand detected → No action';
         gestureStateRef.current = { type: 'none', confidence: 0 };
     }
-  }, [addLog]);
+  }, [addLog, postToParent]);
 
   /**
    * Optimized frame processor — minimal allocations, batched UI updates
@@ -383,6 +398,8 @@ export const useHandTracking = (): HandTrackingResult => {
           cursorPositionRef.current = { ...cursorPositionRef.current, visible: false };
           cursorActivatedRef.current = false;
           handLostTimerRef.current = null;
+          // Tell extension to hide cursor
+          postToParent({ gesture: 'hide' });
         }, 3000);
       }
       currentGestureRef.current = 'No hand detected';
