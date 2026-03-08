@@ -113,6 +113,36 @@ export const useVoiceAssistant = () => {
       if (type === 'user') {
         processVoiceCommand(text);
 
+        // Client-side fallback: open website commands
+        const openMatch = text.match(/\bopen\s+(.+)/i);
+        if (openMatch) {
+          const site = openMatch[1].trim().replace(/[?.!]+$/, '').toLowerCase();
+          // Map common names to URLs
+          const siteMap: Record<string, string> = {
+            youtube: 'https://www.youtube.com',
+            google: 'https://www.google.com',
+            gmail: 'https://mail.google.com',
+            twitter: 'https://www.twitter.com',
+            x: 'https://www.x.com',
+            facebook: 'https://www.facebook.com',
+            instagram: 'https://www.instagram.com',
+            reddit: 'https://www.reddit.com',
+            github: 'https://www.github.com',
+            linkedin: 'https://www.linkedin.com',
+            amazon: 'https://www.amazon.com',
+            netflix: 'https://www.netflix.com',
+            spotify: 'https://www.spotify.com',
+          };
+          const url = siteMap[site] || (site.includes('.') ? `https://${site}` : `https://www.${site}.com`);
+          console.log('Opening website:', url);
+          window.open(url, '_blank');
+          const confirmMsg = `Opened ${site} for you.`;
+          setMessages((prev) => [
+            ...prev,
+            { id: `${Date.now()}-open`, text: confirmMsg, timestamp: new Date(), type: 'ai' },
+          ]);
+        }
+
         const weatherMatch = text.match(/\bweather\b(?:\s+(?:in|for))?\s+([a-zA-Z\s,.'-]+)/i);
         const city = weatherMatch?.[1]?.trim();
 
