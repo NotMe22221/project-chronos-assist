@@ -32,6 +32,7 @@ export const useVoiceAssistant = () => {
   featuresRef.current = features;
   const prevVoiceRef = useRef(features.voiceResponses);
   const conversationRef = useRef<ReturnType<typeof useConversation> | null>(null);
+  const agentRunningRef = useRef(false);
 
   const postBrowserAction = useCallback((payload: { kind: 'open_url' | 'youtube_search' | 'google_search' | 'reload_page'; url?: string; query?: string }) => {
     try {
@@ -50,6 +51,7 @@ export const useVoiceAssistant = () => {
       if (window.parent !== window) {
         window.parent.postMessage({ type: 'jarvis-agent-task', task }, '*');
         setAgentRunning(true);
+        agentRunningRef.current = true;
         return true;
       }
     } catch (_) { /* no-op */ }
@@ -78,6 +80,7 @@ export const useVoiceAssistant = () => {
         const { status, message } = event.data;
         if (status === 'done' || status === 'failed' || status === 'cancelled' || status === 'error') {
           setAgentRunning(false);
+          agentRunningRef.current = false;
         }
         setMessages(prev => [...prev, {
           id: `${Date.now()}-agent`,
@@ -266,6 +269,34 @@ export const useVoiceAssistant = () => {
                 { id: `${Date.now()}-open`, text: confirmMsg, timestamp: new Date(), type: 'ai' },
               ]);
             }
+          }
+        }
+
+        // Client-side fallback: detect browser agent tasks
+        // Matches: "click on X", "click the X", "type X in Y", "scroll down", "go to X and do Y", "search for X on the page"
+        const agentPatterns = [
+          /\bclick\s+(?:on\s+)?(?:the\s+|my\s+)?(.+)/i,
+          /\btap\s+(?:on\s+)?(?:the\s+|my\s+)?(.+)/i,
+          /\btype\s+(.+?)\s+(?:in|into)\s+(.+)/i,
+          /\bfill\s+(?:in\s+)?(?:the\s+)?(.+)/i,
+          /\bselect\s+(.+)/i,
+          /\bpress\s+(.+)/i,
+          /\bscroll\s+(?:down|up|to\s+.+)/i,
+          /\bfind\s+(?:the\s+)?(.+?)\s+(?:button|link|tab|menu|option|field|input)/i,
+          /\bgo\s+to\s+(.+?)\s+and\s+(.+)/i,
+          /\bnavigate\s+to\s+(.+?)\s+(?:and|then)\s+(.+)/i,
+          /\blog\s*(?:in|into)\b/i,
+          /\bsign\s*(?:in|into|up)\b/i,
+        ];
+
+        const isAgentTask = agentPatterns.some(p => p.test(text));
+        if (isAgentTask && !agentRunningRef.current) {
+          const relayed = postAgentTask(text);
+          if (relayed) {
+            setMessages((prev) => [
+              ...prev,
+              { id: `${Date.now()}-agent-auto`, text: `🤖 Starting browser task: ${text}`, timestamp: new Date(), type: 'ai' },
+            ]);
           }
         }
 
