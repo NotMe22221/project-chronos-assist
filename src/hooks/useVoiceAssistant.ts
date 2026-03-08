@@ -225,31 +225,47 @@ export const useVoiceAssistant = () => {
         } else {
           const openMatch = text.match(/\bopen\s+(.+)/i);
           if (openMatch) {
-            const site = openMatch[1].trim().replace(/[?.!]+$/, '').toLowerCase();
-            const siteMap: Record<string, string> = {
-              youtube: 'https://www.youtube.com',
-              google: 'https://www.google.com',
-              gmail: 'https://mail.google.com',
-              twitter: 'https://www.twitter.com',
-              x: 'https://www.x.com',
-              facebook: 'https://www.facebook.com',
-              instagram: 'https://www.instagram.com',
-              reddit: 'https://www.reddit.com',
-              github: 'https://www.github.com',
-              linkedin: 'https://www.linkedin.com',
-              amazon: 'https://www.amazon.com',
-              netflix: 'https://www.netflix.com',
-              spotify: 'https://www.spotify.com',
-            };
-            const url = siteMap[site] || (site.includes('.') ? `https://${site}` : `https://www.${site}.com`);
-            const relayed = postBrowserAction({ kind: 'open_url', url });
-            if (!relayed) window.open(url, '_blank');
+            const rawSite = openMatch[1].trim().replace(/[?.!]+$/, '');
+            const site = rawSite.toLowerCase();
 
-            const confirmMsg = `Opened ${site} for you.`;
-            setMessages((prev) => [
-              ...prev,
-              { id: `${Date.now()}-open`, text: confirmMsg, timestamp: new Date(), type: 'ai' },
-            ]);
+            // Catch "open youtube and search X" that slipped past earlier regexes
+            const ytFallback = site.match(/youtube\s+(?:and\s+)?(?:search|search\s+for|search\s+up|look\s+up|find)\s+(.+)/i);
+            if (ytFallback?.[1]) {
+              const query = ytFallback[1].trim();
+              const relayed = postBrowserAction({ kind: 'youtube_search', query });
+              if (!relayed) {
+                window.open(`https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`, '_blank');
+              }
+              setMessages((prev) => [
+                ...prev,
+                { id: `${Date.now()}-ytfallback`, text: `Searching YouTube for ${query}.`, timestamp: new Date(), type: 'ai' },
+              ]);
+            } else {
+              const siteMap: Record<string, string> = {
+                youtube: 'https://www.youtube.com',
+                google: 'https://www.google.com',
+                gmail: 'https://mail.google.com',
+                twitter: 'https://www.twitter.com',
+                x: 'https://www.x.com',
+                facebook: 'https://www.facebook.com',
+                instagram: 'https://www.instagram.com',
+                reddit: 'https://www.reddit.com',
+                github: 'https://www.github.com',
+                linkedin: 'https://www.linkedin.com',
+                amazon: 'https://www.amazon.com',
+                netflix: 'https://www.netflix.com',
+                spotify: 'https://www.spotify.com',
+              };
+              const url = siteMap[site] || (site.includes('.') ? `https://${site}` : `https://www.${site}.com`);
+              const relayed = postBrowserAction({ kind: 'open_url', url });
+              if (!relayed) window.open(url, '_blank');
+
+              const confirmMsg = `Opened ${site} for you.`;
+              setMessages((prev) => [
+                ...prev,
+                { id: `${Date.now()}-open`, text: confirmMsg, timestamp: new Date(), type: 'ai' },
+              ]);
+            }
           }
         }
 
