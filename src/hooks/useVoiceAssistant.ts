@@ -3,7 +3,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { useFeatureToggle } from '@/contexts/FeatureToggleContext';
 
-const AGENT_ID = 'agent_0401k3w8fx86e22sdaw6j6va5dd7';
+const AGENT_ID = 'agent_8001kk72b77xe6stqpfd4gcvptz9';
 
 interface ConversationMessage {
   id: string;
