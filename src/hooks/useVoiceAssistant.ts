@@ -24,6 +24,31 @@ export const useVoiceAssistant = () => {
   const featuresRef = useRef(features);
   featuresRef.current = features;
   const prevVoiceRef = useRef(features.voiceResponses);
+  const conversationRef = useRef<ReturnType<typeof useConversation> | null>(null);
+
+  const fetchWeatherSummary = useCallback(async (rawCity: string) => {
+    const city = rawCity.trim().replace(/[?.!]+$/, '');
+    if (!city) return 'Please provide a city name.';
+
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+    const response = await fetch(`${supabaseUrl}/functions/v1/get-weather`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: supabaseKey,
+        Authorization: `Bearer ${supabaseKey}`,
+      },
+      body: JSON.stringify({ city }),
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+      return data?.error ? `Weather lookup failed: ${data.error}` : 'Weather lookup failed.';
+    }
+
+    return `Current weather in ${data.city}, ${data.country}: ${Math.round(data.temperature)}°C, ${data.description}. Feels like ${Math.round(data.feels_like)}°C with ${data.humidity}% humidity and wind speed of ${data.wind_speed} m/s.`;
+  }, []);
 
   const conversation = useConversation({
     clientTools: {
@@ -57,38 +82,8 @@ export const useVoiceAssistant = () => {
         return `Opening ${url}`;
       },
       getWeather: async (params: { city: string }) => {
-        const city = (params?.city || '').trim();
-        console.log('🌤️ getWeather called with city:', city, 'params:', params);
-        if (!city) return 'Please provide a city name.';
-
         try {
-          const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-          const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-
-          console.log('🌤️ Fetching weather for:', city);
-          const controller = new AbortController();
-          const timeout = setTimeout(() => controller.abort(), 8000);
-
-          const response = await fetch(`${supabaseUrl}/functions/v1/get-weather`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              apikey: supabaseKey,
-              Authorization: `Bearer ${supabaseKey}`,
-            },
-            body: JSON.stringify({ city }),
-            signal: controller.signal,
-          });
-
-          clearTimeout(timeout);
-          const data = await response.json();
-          console.log('🌤️ Weather response:', data);
-
-          if (!response.ok) {
-            return data?.error ? `Weather lookup failed: ${data.error}` : 'Weather lookup failed.';
-          }
-
-          return `Current weather in ${data.city}, ${data.country}: ${Math.round(data.temperature)}°C, ${data.description}. Feels like ${Math.round(data.feels_like)}°C with ${data.humidity}% humidity and wind speed of ${data.wind_speed} m/s.`;
+          return await fetchWeatherSummary(params?.city || '');
         } catch (error) {
           console.error('🌤️ getWeather error:', error);
           return 'I could not retrieve weather data right now.';
@@ -115,7 +110,30 @@ export const useVoiceAssistant = () => {
 
       if (!text.trim()) return;
 
-      if (type === 'user') processVoiceCommand(text);
+      if (type === 'user') {
+        processVoiceCommand(text);
+
+        const weatherMatch = text.match(/\bweather\b(?:\s+(?:in|for))?\s+([a-zA-Z\s,.'-]+)/i);
+        const city = weatherMatch?.[1]?.trim();
+
+        if (city) {
+          fetchWeatherSummary(city)
+            .then((weatherSummary) => {
+              setMessages((prev) => [
+                ...prev,
+                { id: `${Date.now()}-weather`, text: weatherSummary, timestamp: new Date(), type: 'ai' },
+              ]);
+
+              if (featuresRef.current.voiceResponses && 'speechSynthesis' in window) {
+                window.speechSynthesis.cancel();
+                window.speechSynthesis.speak(new SpeechSynthesisUtterance(weatherSummary));
+              }
+
+              conversationRef.current?.sendContextualUpdate?.(`Live weather lookup result: ${weatherSummary}`);
+            })
+            .catch((error) => console.error('Weather fallback failed:', error));
+        }
+      }
 
       setMessages((prev) => [
         ...prev,
@@ -134,6 +152,7 @@ export const useVoiceAssistant = () => {
   });
 
   const isConnected = conversation.status === 'connected';
+  conversationRef.current = conversation;
 
   const startConversation = useCallback(async () => {
     setIsConnecting(true);
