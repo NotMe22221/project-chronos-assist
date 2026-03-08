@@ -58,11 +58,16 @@ export const useVoiceAssistant = () => {
       },
       getWeather: async (params: { city: string }) => {
         const city = (params?.city || '').trim();
+        console.log('🌤️ getWeather called with city:', city, 'params:', params);
         if (!city) return 'Please provide a city name.';
 
         try {
           const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
           const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+
+          console.log('🌤️ Fetching weather for:', city);
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), 8000);
 
           const response = await fetch(`${supabaseUrl}/functions/v1/get-weather`, {
             method: 'POST',
@@ -72,16 +77,20 @@ export const useVoiceAssistant = () => {
               Authorization: `Bearer ${supabaseKey}`,
             },
             body: JSON.stringify({ city }),
+            signal: controller.signal,
           });
 
+          clearTimeout(timeout);
           const data = await response.json();
+          console.log('🌤️ Weather response:', data);
+
           if (!response.ok) {
             return data?.error ? `Weather lookup failed: ${data.error}` : 'Weather lookup failed.';
           }
 
-          return `Current weather in ${data.city}, ${data.country}: ${Math.round(data.temperature)}°C, ${data.description}. Feels like ${Math.round(data.feels_like)}°C with ${data.humidity}% humidity.`;
+          return `Current weather in ${data.city}, ${data.country}: ${Math.round(data.temperature)}°C, ${data.description}. Feels like ${Math.round(data.feels_like)}°C with ${data.humidity}% humidity and wind speed of ${data.wind_speed} m/s.`;
         } catch (error) {
-          console.error('getWeather client tool error:', error);
+          console.error('🌤️ getWeather error:', error);
           return 'I could not retrieve weather data right now.';
         }
       },
