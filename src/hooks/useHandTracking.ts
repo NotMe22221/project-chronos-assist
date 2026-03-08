@@ -225,9 +225,15 @@ export const useHandTracking = (): HandTrackingResult => {
           const rawX = (1 - landmarks[8].x) * screen.w;
           const rawY = landmarks[8].y * screen.h;
 
+          // Velocity-adaptive smoothing: fast movements get less smoothing for responsiveness,
+          // slow movements get more smoothing for precision
           const prev = smoothCursorRef.current;
-          const rawDist = Math.hypot(rawX - prev.x, rawY - prev.y);
-          const smoothing = rawDist > 80 ? 0.5 : rawDist > 30 ? 0.35 : 0.2;
+          const prevRaw = prevRawCursorRef.current;
+          const velocity = Math.hypot(rawX - prevRaw.x, rawY - prevRaw.y);
+          prevRawCursorRef.current = { x: rawX, y: rawY };
+          
+          // Adaptive lerp: 0.15 for tiny movements (stable), 0.6 for fast sweeps (responsive)
+          const smoothing = Math.min(0.6, Math.max(0.15, velocity / 200));
           const smoothX = prev.x + (rawX - prev.x) * smoothing;
           const smoothY = prev.y + (rawY - prev.y) * smoothing;
           smoothCursorRef.current = { x: smoothX, y: smoothY };
