@@ -1,5 +1,5 @@
 * { margin: 0; padding: 0; box-sizing: border-box; }
-body { width: 320px; font-family: 'Segoe UI', Arial, sans-serif; background: #0a0a1a; color: #00e5ff; }
+body { width: 360px; font-family: 'Segoe UI', Arial, sans-serif; background: #0a0a1a; color: #00e5ff; }
 .container { padding: 20px; text-align: center; }
 h1 { font-size: 22px; margin-bottom: 14px; letter-spacing: 2px; }
 button {
@@ -11,9 +11,23 @@ button {
 button:hover { opacity: 0.85; }
 button.active { background: linear-gradient(135deg, #ff4444, #cc0000); color: #fff; }
 #status { font-size: 12px; margin-top: 10px; opacity: 0.7; }
+.input-row {
+  display: flex; gap: 6px; margin-top: 12px;
+}
+.input-row input {
+  flex: 1; padding: 8px 12px; border-radius: 8px;
+  border: 1px solid #1a3a4a; background: #0d1a2a; color: #00e5ff;
+  font-size: 13px; outline: none;
+}
+.input-row input::placeholder { color: #3a6a7a; }
+.input-row input:focus { border-color: #00e5ff; }
+.input-row button {
+  padding: 8px 14px; font-size: 16px; border-radius: 8px;
+  min-width: 40px;
+}
 #log {
   margin-top: 14px; text-align: left; font-size: 13px;
-  max-height: 200px; overflow-y: auto; color: #ccc;
+  max-height: 220px; overflow-y: auto; color: #ccc;
 }
 .log-entry { padding: 4px 0; border-bottom: 1px solid #1a1a2e; }
 .log-entry.user { color: #00e5ff; }
