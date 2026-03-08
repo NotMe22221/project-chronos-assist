@@ -110,7 +110,30 @@ export const useVoiceAssistant = () => {
 
       if (!text.trim()) return;
 
-      if (type === 'user') processVoiceCommand(text);
+      if (type === 'user') {
+        processVoiceCommand(text);
+
+        const weatherMatch = text.match(/\bweather\b(?:\s+(?:in|for))?\s+([a-zA-Z\s,.'-]+)/i);
+        const city = weatherMatch?.[1]?.trim();
+
+        if (city) {
+          fetchWeatherSummary(city)
+            .then((weatherSummary) => {
+              setMessages((prev) => [
+                ...prev,
+                { id: `${Date.now()}-weather`, text: weatherSummary, timestamp: new Date(), type: 'ai' },
+              ]);
+
+              if (featuresRef.current.voiceResponses && 'speechSynthesis' in window) {
+                window.speechSynthesis.cancel();
+                window.speechSynthesis.speak(new SpeechSynthesisUtterance(weatherSummary));
+              }
+
+              conversationRef.current?.sendContextualUpdate?.(`Live weather lookup result: ${weatherSummary}`);
+            })
+            .catch((error) => console.error('Weather fallback failed:', error));
+        }
+      }
 
       setMessages((prev) => [
         ...prev,
