@@ -294,16 +294,11 @@ export const useHandTracking = (): HandTrackingResult => {
   const onResults = useCallback((results: any) => {
     const frameStartTime = performance.now();
     
-    // Frame skipping
+    // Frame skipping — mobile only, skip every other frame
     if (isMobile) {
       frameSkipCounterRef.current++;
-      if (frameSkipCounterRef.current % 3 === 0) return;
+      if (frameSkipCounterRef.current % 2 === 0) return;
     }
-    
-    // Desktop: 30 FPS target
-    const now = performance.now();
-    if (!isMobile && now - frameThrottleRef.current < 33) return;
-    frameThrottleRef.current = now;
     
     if (!canvasRef.current || !videoRef.current) return;
     
