@@ -269,6 +269,34 @@ export const useVoiceAssistant = () => {
           }
         }
 
+        // Client-side fallback: detect browser agent tasks
+        // Matches: "click on X", "click the X", "type X in Y", "scroll down", "go to X and do Y", "search for X on the page"
+        const agentPatterns = [
+          /\bclick\s+(?:on\s+)?(?:the\s+|my\s+)?(.+)/i,
+          /\btap\s+(?:on\s+)?(?:the\s+|my\s+)?(.+)/i,
+          /\btype\s+(.+?)\s+(?:in|into)\s+(.+)/i,
+          /\bfill\s+(?:in\s+)?(?:the\s+)?(.+)/i,
+          /\bselect\s+(.+)/i,
+          /\bpress\s+(.+)/i,
+          /\bscroll\s+(?:down|up|to\s+.+)/i,
+          /\bfind\s+(?:the\s+)?(.+?)\s+(?:button|link|tab|menu|option|field|input)/i,
+          /\bgo\s+to\s+(.+?)\s+and\s+(.+)/i,
+          /\bnavigate\s+to\s+(.+?)\s+(?:and|then)\s+(.+)/i,
+          /\blog\s*(?:in|into)\b/i,
+          /\bsign\s*(?:in|into|up)\b/i,
+        ];
+
+        const isAgentTask = agentPatterns.some(p => p.test(text));
+        if (isAgentTask && !agentRunning) {
+          const relayed = postAgentTask(text);
+          if (relayed) {
+            setMessages((prev) => [
+              ...prev,
+              { id: `${Date.now()}-agent-auto`, text: `🤖 Starting browser task: ${text}`, timestamp: new Date(), type: 'ai' },
+            ]);
+          }
+        }
+
         const weatherMatch = text.match(/\bweather\b(?:\s+(?:in|for))?\s+([a-zA-Z\s,.'-]+)/i);
         const city = weatherMatch?.[1]?.trim();
 
