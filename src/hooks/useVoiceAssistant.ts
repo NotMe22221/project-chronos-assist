@@ -90,7 +90,8 @@ export const useVoiceAssistant = () => {
       },
       openWebsite: (params: { url: string }) => {
         const url = params.url.startsWith('http') ? params.url : `https://${params.url}`;
-        window.open(url, '_blank');
+        const relayed = postBrowserAction({ kind: 'open_url', url });
+        if (!relayed) window.open(url, '_blank');
         return `Opening ${url}`;
       },
       getWeather: async (params: { city: string }) => {
