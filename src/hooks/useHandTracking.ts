@@ -207,8 +207,7 @@ export const useHandTracking = (): HandTrackingResult => {
             if (Math.abs(delta) > 0.005) {
               const targetVelocity = delta * 1000;
               scrollVelocityRef.current = scrollVelocityRef.current * 0.6 + targetVelocity * 0.4;
-              window.scrollBy({ top: scrollVelocityRef.current });
-              // Relay scroll to parent/extension
+              // Only relay scroll to webpage via extension - no local scroll
               postToParent({ gesture: 'scroll', velocity: scrollVelocityRef.current });
               currentGestureRef.current = delta > 0 ? '👇 Scrolling DOWN' : '👆 Scrolling UP';
             }
