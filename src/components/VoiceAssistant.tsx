@@ -1,5 +1,5 @@
 import { useRef, useEffect } from 'react';
-import { Phone, PhoneOff, Mic, Volume2, VolumeX } from 'lucide-react';
+import { Phone, PhoneOff, Mic, Volume2, VolumeX, Bot, Check, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { JarvisPanel } from './JarvisPanel';
 import { useVoiceAssistant } from '@/hooks/useVoiceAssistant';
@@ -16,6 +16,9 @@ export const VoiceAssistant = () => {
     status,
     startConversation,
     endConversation,
+    agentPending,
+    agentRunning,
+    confirmAgentStep,
   } = useVoiceAssistant();
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -94,6 +97,45 @@ export const VoiceAssistant = () => {
             <span className="text-xs text-primary font-medium text-enhanced">
               {isSpeaking ? 'Speaking — say something to interrupt' : 'Microphone active — speak naturally'}
             </span>
+          </div>
+        )}
+
+        {/* Browser Agent Confirmation */}
+        {agentPending && (
+          <div className="p-3 rounded-lg bg-accent/10 border border-accent/30 space-y-2 animate-in fade-in slide-in-from-top-2">
+            <div className="flex items-center gap-2">
+              <Bot className="h-4 w-4 text-accent-foreground" />
+              <span className="text-xs font-semibold text-accent-foreground">Step {agentPending.step}</span>
+            </div>
+            <p className="text-sm text-foreground">{agentPending.action.description}</p>
+            <p className="text-xs text-muted-foreground font-mono">
+              {agentPending.action.action}: {agentPending.action.selector || agentPending.action.url || ''}
+            </p>
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                className="h-7 text-xs gap-1 bg-success hover:bg-success/80"
+                onClick={() => confirmAgentStep(true)}
+              >
+                <Check className="h-3 w-3" /> Execute
+              </Button>
+              <Button
+                size="sm"
+                variant="destructive"
+                className="h-7 text-xs gap-1"
+                onClick={() => confirmAgentStep(false)}
+              >
+                <X className="h-3 w-3" /> Cancel
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Agent running indicator */}
+        {agentRunning && !agentPending && (
+          <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-accent/10 border border-accent/20">
+            <Bot className="h-4 w-4 text-accent-foreground animate-pulse" />
+            <span className="text-xs text-accent-foreground font-medium">Browser agent working...</span>
           </div>
         )}
 
