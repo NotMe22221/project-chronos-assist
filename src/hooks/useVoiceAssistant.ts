@@ -80,6 +80,7 @@ export const useVoiceAssistant = () => {
         const { status, message } = event.data;
         if (status === 'done' || status === 'failed' || status === 'cancelled' || status === 'error') {
           setAgentRunning(false);
+          agentRunningRef.current = false;
         }
         setMessages(prev => [...prev, {
           id: `${Date.now()}-agent`,
