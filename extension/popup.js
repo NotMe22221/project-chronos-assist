@@ -1,7 +1,14 @@
 const startBtn = document.getElementById('startBtn');
 const status = document.getElementById('status');
 const log = document.getElementById('log');
+const textInput = document.getElementById('textInput');
+const sendBtn = document.getElementById('sendBtn');
 
+// ── Config ──
+const SUPABASE_URL = 'https://umhqazctftqtyuocvnim.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVtaHFhemN0ZnRxdHl1b2N2bmltIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzEwMjc5NjMsImV4cCI6MjA4NjYwMzk2M30.ecFgYUTilN8qsfw-iT8AB2cRsarCO_WNRez_jJB8Zv8';
+
+// ── Speech Recognition ──
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 let recognition = null;
 let listening = false;
@@ -13,35 +20,56 @@ if (SpeechRecognition) {
   recognition.lang = 'en-US';
 
   recognition.onresult = (event) => {
-    const text = event.results[event.results.length - 1][0].transcript.trim().toLowerCase();
+    const text = event.results[event.results.length - 1][0].transcript.trim();
     addLog(text, 'user');
-    handleCommand(text);
+    processInput(text);
   };
 
   recognition.onerror = (e) => {
+    console.error('Speech error:', e.error);
     status.textContent = `Error: ${e.error}`;
     if (e.error !== 'no-speech') stopListening();
   };
 
   recognition.onend = () => {
-    if (listening) recognition.start(); // auto-restart
+    if (listening) {
+      try { recognition.start(); } catch (e) { /* already started */ }
+    }
   };
 } else {
   startBtn.disabled = true;
-  status.textContent = 'Speech recognition not supported in this browser.';
+  status.textContent = 'Speech recognition not supported.';
 }
 
+// ── Button Handlers ──
 startBtn.addEventListener('click', () => {
   if (listening) stopListening();
   else startListening();
 });
 
+sendBtn.addEventListener('click', () => {
+  const text = textInput.value.trim();
+  if (!text) return;
+  textInput.value = '';
+  addLog(text, 'user');
+  processInput(text);
+});
+
+textInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') sendBtn.click();
+});
+
 function startListening() {
-  recognition.start();
-  listening = true;
-  startBtn.textContent = '🔴 Stop Listening';
-  startBtn.classList.add('active');
-  status.textContent = 'Listening... speak a command';
+  try {
+    recognition.start();
+    listening = true;
+    startBtn.textContent = '🔴 Stop Listening';
+    startBtn.classList.add('active');
+    status.textContent = 'Listening... speak a command';
+  } catch (e) {
+    status.textContent = 'Error starting microphone';
+    console.error(e);
+  }
 }
 
 function stopListening() {
@@ -52,6 +80,7 @@ function stopListening() {
   status.textContent = 'Click to activate';
 }
 
+// ── Logging & TTS ──
 function addLog(text, type) {
   const div = document.createElement('div');
   div.className = `log-entry ${type}`;
@@ -60,13 +89,48 @@ function addLog(text, type) {
 }
 
 function speak(text) {
+  speechSynthesis.cancel();
   const utterance = new SpeechSynthesisUtterance(text);
   utterance.rate = 1;
   speechSynthesis.speak(utterance);
   addLog(text, 'ai');
 }
 
-function handleCommand(text) {
+// ── Process Input ──
+async function processInput(text) {
+  const lower = text.toLowerCase();
+
+  // Try browser commands first
+  if (handleBrowserCommand(lower)) return;
+
+  // Otherwise, send to JARVIS AI
+  status.textContent = 'Thinking...';
+  try {
+    const response = await fetch(`${SUPABASE_URL}/functions/v1/jarvis-chat`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+      },
+      body: JSON.stringify({ message: text }),
+    });
+
+    const data = await response.json();
+    if (data.error) {
+      speak(`Sorry, ${data.error}`);
+    } else {
+      speak(data.reply || "I couldn't generate a response.");
+    }
+  } catch (err) {
+    console.error('AI request failed:', err);
+    speak("Sorry, I couldn't reach my AI backend.");
+  }
+  status.textContent = listening ? 'Listening...' : 'Click to activate';
+}
+
+// ── Browser Commands ──
+function handleBrowserCommand(text) {
   // Open website
   const openMatch = text.match(/open\s+(.+)/);
   if (openMatch) {
@@ -83,7 +147,7 @@ function handleCommand(text) {
     const url = siteMap[site] || (site.includes('.') ? `https://${site}` : `https://www.${site}.com`);
     chrome.tabs.create({ url });
     speak(`Opening ${site}`);
-    return;
+    return true;
   }
 
   // YouTube search
@@ -91,15 +155,15 @@ function handleCommand(text) {
   if (ytMatch) {
     chrome.tabs.create({ url: `https://www.youtube.com/results?search_query=${encodeURIComponent(ytMatch[1])}` });
     speak(`Searching YouTube for ${ytMatch[1]}`);
-    return;
+    return true;
   }
 
   // Google search
-  const googleMatch = text.match(/(?:google|search|search for)\s+(.+)/);
+  const googleMatch = text.match(/^(?:google|search|search for)\s+(.+)/);
   if (googleMatch) {
     chrome.tabs.create({ url: `https://www.google.com/search?q=${encodeURIComponent(googleMatch[1])}` });
     speak(`Searching for ${googleMatch[1]}`);
-    return;
+    return true;
   }
 
   // Close tab
@@ -108,48 +172,55 @@ function handleCommand(text) {
       if (tabs[0]) chrome.tabs.remove(tabs[0].id);
     });
     speak('Tab closed');
-    return;
+    return true;
   }
 
   // New tab
   if (text.includes('new tab')) {
     chrome.tabs.create({});
     speak('New tab opened');
-    return;
+    return true;
   }
 
   // Scroll
-  if (text.includes('scroll down')) {
-    sendToContent({ action: 'scroll_down' });
-    speak('Scrolling down');
-    return;
-  }
-  if (text.includes('scroll up')) {
-    sendToContent({ action: 'scroll_up' });
-    speak('Scrolling up');
-    return;
-  }
+  if (text.includes('scroll down')) { sendToContent({ action: 'scroll_down' }); speak('Scrolling down'); return true; }
+  if (text.includes('scroll up')) { sendToContent({ action: 'scroll_up' }); speak('Scrolling up'); return true; }
+  if (text.includes('scroll to top') || text.includes('go to top')) { sendToContent({ action: 'scroll_top' }); speak('Scrolling to top'); return true; }
+  if (text.includes('scroll to bottom') || text.includes('go to bottom')) { sendToContent({ action: 'scroll_bottom' }); speak('Scrolling to bottom'); return true; }
 
-  // Go back / forward
-  if (text.includes('go back')) {
-    chrome.tabs.goBack();
-    speak('Going back');
-    return;
-  }
-  if (text.includes('go forward')) {
-    chrome.tabs.goForward();
-    speak('Going forward');
-    return;
-  }
+  // Navigation
+  if (text.includes('go back')) { chrome.tabs.goBack(); speak('Going back'); return true; }
+  if (text.includes('go forward')) { chrome.tabs.goForward(); speak('Going forward'); return true; }
 
   // Reload
-  if (text.includes('reload') || text.includes('refresh')) {
-    chrome.tabs.reload();
-    speak('Page reloaded');
-    return;
+  if (text.includes('reload') || text.includes('refresh')) { chrome.tabs.reload(); speak('Page reloaded'); return true; }
+
+  // Bookmark
+  if (text.includes('bookmark')) {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      if (tabs[0]) chrome.bookmarks?.create({ title: tabs[0].title, url: tabs[0].url });
+    });
+    speak('Page bookmarked');
+    return true;
   }
 
-  speak("Sorry, I didn't understand that command.");
+  // Mute/unmute
+  if (text.includes('mute')) {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      if (tabs[0]) chrome.tabs.update(tabs[0].id, { muted: true });
+    });
+    speak('Tab muted');
+    return true;
+  }
+  if (text.includes('unmute')) {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      if (tabs[0]) chrome.tabs.update(tabs[0].id, { muted: false });
+    });
+    speak('Tab unmuted');
+    return true;
+  }
+
+  return false;
 }
 
 function sendToContent(message) {
