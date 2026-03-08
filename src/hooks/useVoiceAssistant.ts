@@ -12,12 +12,19 @@ interface ConversationMessage {
   type: 'user' | 'ai';
 }
 
+interface AgentStep {
+  step: number;
+  action: { action: string; selector?: string; text?: string; url?: string; description: string };
+}
+
 export const useVoiceAssistant = () => {
   const [messages, setMessages] = useState<ConversationMessage[]>([
     { id: '1', text: 'JARVIS online. Voice and gesture control ready.', timestamp: new Date(), type: 'ai' },
   ]);
   const [isConnecting, setIsConnecting] = useState(false);
   const [pendingDisconnect, setPendingDisconnect] = useState(false);
+  const [agentPending, setAgentPending] = useState<AgentStep | null>(null);
+  const [agentRunning, setAgentRunning] = useState(false);
   const { toast } = useToast();
   const { processVoiceCommand, features } = useFeatureToggle();
 
@@ -36,6 +43,52 @@ export const useVoiceAssistant = () => {
       // no-op
     }
     return false;
+  }, []);
+
+  const postAgentTask = useCallback((task: string) => {
+    try {
+      if (window.parent !== window) {
+        window.parent.postMessage({ type: 'jarvis-agent-task', task }, '*');
+        setAgentRunning(true);
+        return true;
+      }
+    } catch (_) { /* no-op */ }
+    return false;
+  }, []);
+
+  const confirmAgentStep = useCallback((confirmed: boolean) => {
+    try {
+      if (window.parent !== window) {
+        window.parent.postMessage({ type: 'jarvis-agent-confirm', confirmed }, '*');
+      }
+    } catch (_) { /* no-op */ }
+    setAgentPending(null);
+  }, []);
+
+  // Listen for agent status messages from parent (sidepanel)
+  useEffect(() => {
+    const handler = (event: MessageEvent) => {
+      if (!event.data) return;
+
+      if (event.data.type === 'jarvis-agent-confirm-request') {
+        setAgentPending({ step: event.data.step, action: event.data.action });
+      }
+
+      if (event.data.type === 'jarvis-agent-status') {
+        const { status, message } = event.data;
+        if (status === 'done' || status === 'failed' || status === 'cancelled' || status === 'error') {
+          setAgentRunning(false);
+        }
+        setMessages(prev => [...prev, {
+          id: `${Date.now()}-agent`,
+          text: `🤖 ${message}`,
+          timestamp: new Date(),
+          type: 'ai',
+        }]);
+      }
+    };
+    window.addEventListener('message', handler);
+    return () => window.removeEventListener('message', handler);
   }, []);
 
   const fetchWeatherSummary = useCallback(async (rawCity: string) => {
@@ -93,6 +146,13 @@ export const useVoiceAssistant = () => {
         const relayed = postBrowserAction({ kind: 'open_url', url });
         if (!relayed) window.open(url, '_blank');
         return `Opening ${url}`;
+      },
+      browserAgent: (params: { task: string }) => {
+        const relayed = postAgentTask(params.task);
+        if (!relayed) {
+          return 'Browser agent requires the JARVIS extension side panel. Please open JARVIS from the extension.';
+        }
+        return `Starting browser task: ${params.task}. I'll show you each step for confirmation.`;
       },
       reloadPage: () => {
         const relayed = postBrowserAction({ kind: 'reload_page' });
@@ -317,5 +377,8 @@ export const useVoiceAssistant = () => {
     status: conversation.status,
     startConversation,
     endConversation,
+    agentPending,
+    agentRunning,
+    confirmAgentStep,
   };
 };
