@@ -32,6 +32,7 @@ export const useVoiceAssistant = () => {
   featuresRef.current = features;
   const prevVoiceRef = useRef(features.voiceResponses);
   const conversationRef = useRef<ReturnType<typeof useConversation> | null>(null);
+  const agentRunningRef = useRef(false);
 
   const postBrowserAction = useCallback((payload: { kind: 'open_url' | 'youtube_search' | 'google_search' | 'reload_page'; url?: string; query?: string }) => {
     try {
