@@ -147,6 +147,13 @@ export const useVoiceAssistant = () => {
         if (!relayed) window.open(url, '_blank');
         return `Opening ${url}`;
       },
+      browserAgent: (params: { task: string }) => {
+        const relayed = postAgentTask(params.task);
+        if (!relayed) {
+          return 'Browser agent requires the JARVIS extension side panel. Please open JARVIS from the extension.';
+        }
+        return `Starting browser task: ${params.task}. I'll show you each step for confirmation.`;
+      },
       reloadPage: () => {
         const relayed = postBrowserAction({ kind: 'reload_page' });
         if (!relayed) window.location.reload();
