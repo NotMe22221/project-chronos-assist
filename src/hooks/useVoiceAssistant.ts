@@ -290,7 +290,7 @@ export const useVoiceAssistant = () => {
         ];
 
         const isAgentTask = agentPatterns.some(p => p.test(text));
-        if (isAgentTask && !agentRunning) {
+        if (isAgentTask && !agentRunningRef.current) {
           const relayed = postAgentTask(text);
           if (relayed) {
             setMessages((prev) => [
