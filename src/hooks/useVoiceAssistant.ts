@@ -17,6 +17,7 @@ export const useVoiceAssistant = () => {
     { id: '1', text: 'JARVIS online. Voice and gesture control ready.', timestamp: new Date(), type: 'ai' },
   ]);
   const [isConnecting, setIsConnecting] = useState(false);
+  const [pendingDisconnect, setPendingDisconnect] = useState(false);
   const { toast } = useToast();
   const { processVoiceCommand, features } = useFeatureToggle();
 
@@ -45,6 +46,10 @@ export const useVoiceAssistant = () => {
         if (!featuresRef.current.voiceResponses) return 'Voice responses are already disabled.';
         processVoiceCommand('stop talking');
         return 'Voice responses disabled.';
+      },
+      disconnectCall: () => {
+        setPendingDisconnect(true);
+        return 'Goodbye! Disconnecting now.';
       },
     },
     onConnect: () => {
@@ -153,6 +158,14 @@ export const useVoiceAssistant = () => {
       }
     }
   }, [features.voiceResponses, isConnected, conversation]);
+
+  // Auto-disconnect after agent says goodbye
+  useEffect(() => {
+    if (pendingDisconnect && !conversation.isSpeaking) {
+      setPendingDisconnect(false);
+      conversation.endSession().catch(console.error);
+    }
+  }, [pendingDisconnect, conversation]);
 
   return {
     messages,
