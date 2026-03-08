@@ -70,18 +70,35 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   // Browser Agent: Extract page context from active tab
   // ═══════════════════════════════════════════════
   if (message.action === 'agent_extract_context') {
-    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
       if (!tabs[0]?.id) {
         sendResponse({ error: 'No active tab' });
         return;
       }
-      chrome.tabs.sendMessage(tabs[0].id, { action: 'extract_page_context' }, (response) => {
-        if (chrome.runtime.lastError) {
-          sendResponse({ error: chrome.runtime.lastError.message });
-        } else {
-          sendResponse(response);
+      
+      try {
+        let screenshot = null;
+        try {
+          screenshot = await new Promise((resolve) => {
+            chrome.tabs.captureVisibleTab(tabs[0].windowId, { format: 'jpeg', quality: 50 }, (dataUrl) => {
+              if (chrome.runtime.lastError) resolve(null);
+              else resolve(dataUrl);
+            });
+          });
+        } catch (e) {
+          console.warn('Screenshot failed:', e);
         }
-      });
+
+        chrome.tabs.sendMessage(tabs[0].id, { action: 'extract_page_context' }, (response) => {
+          if (chrome.runtime.lastError) {
+            sendResponse({ error: chrome.runtime.lastError.message });
+          } else {
+            sendResponse({ ...response, screenshot });
+          }
+        });
+      } catch (err) {
+        sendResponse({ error: err.message });
+      }
     });
     return true; // async
   }
