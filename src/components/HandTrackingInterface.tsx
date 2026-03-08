@@ -53,21 +53,7 @@ export const HandTrackingInterface = () => {
 
   return (
     <>
-      {/* Floating Cursor Overlay — hidden when hand tracking is disabled */}
-      {cursorPosition.visible && !isDisabledByToggle && (
-        <div
-          className="fixed z-[9999] pointer-events-none will-change-transform"
-          style={{
-            transform: `translate3d(${cursorPosition.x - 12}px, ${cursorPosition.y - 12}px, 0)`,
-            left: 0,
-            top: 0,
-            transition: 'transform 0.06s linear',
-          }}
-        >
-          <div className="w-6 h-6 rounded-full bg-primary/80 border-2 border-primary-foreground shadow-lg shadow-primary/40 animate-pulse" />
-          <div className="w-2 h-2 rounded-full bg-primary-foreground absolute top-2 left-2" />
-        </div>
-      )}
+      {/* Cursor now renders on webpage via extension - removed from sidebar */}
     <JarvisPanel
       title="Hand Gesture Control" 
       glow={isActive} 
