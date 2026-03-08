@@ -8,3 +8,6 @@ verify_jwt = false
 
 [functions.get-weather]
 verify_jwt = false
+
+[functions.browser-agent]
+verify_jwt = false
