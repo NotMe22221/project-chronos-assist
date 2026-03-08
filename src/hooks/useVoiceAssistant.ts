@@ -45,6 +45,52 @@ export const useVoiceAssistant = () => {
     return false;
   }, []);
 
+  const postAgentTask = useCallback((task: string) => {
+    try {
+      if (window.parent !== window) {
+        window.parent.postMessage({ type: 'jarvis-agent-task', task }, '*');
+        setAgentRunning(true);
+        return true;
+      }
+    } catch (_) { /* no-op */ }
+    return false;
+  }, []);
+
+  const confirmAgentStep = useCallback((confirmed: boolean) => {
+    try {
+      if (window.parent !== window) {
+        window.parent.postMessage({ type: 'jarvis-agent-confirm', confirmed }, '*');
+      }
+    } catch (_) { /* no-op */ }
+    setAgentPending(null);
+  }, []);
+
+  // Listen for agent status messages from parent (sidepanel)
+  useEffect(() => {
+    const handler = (event: MessageEvent) => {
+      if (!event.data) return;
+
+      if (event.data.type === 'jarvis-agent-confirm-request') {
+        setAgentPending({ step: event.data.step, action: event.data.action });
+      }
+
+      if (event.data.type === 'jarvis-agent-status') {
+        const { status, message } = event.data;
+        if (status === 'done' || status === 'failed' || status === 'cancelled' || status === 'error') {
+          setAgentRunning(false);
+        }
+        setMessages(prev => [...prev, {
+          id: `${Date.now()}-agent`,
+          text: `🤖 ${message}`,
+          timestamp: new Date(),
+          type: 'ai',
+        }]);
+      }
+    };
+    window.addEventListener('message', handler);
+    return () => window.removeEventListener('message', handler);
+  }, []);
+
   const fetchWeatherSummary = useCallback(async (rawCity: string) => {
     const city = rawCity.trim().replace(/[?.!]+$/, '');
     if (!city) return 'Please provide a city name.';
