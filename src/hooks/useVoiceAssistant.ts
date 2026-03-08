@@ -159,6 +159,14 @@ export const useVoiceAssistant = () => {
     }
   }, [features.voiceResponses, isConnected, conversation]);
 
+  // Auto-disconnect after agent says goodbye
+  useEffect(() => {
+    if (pendingDisconnect && !conversation.isSpeaking) {
+      setPendingDisconnect(false);
+      conversation.endSession().catch(console.error);
+    }
+  }, [pendingDisconnect, conversation]);
+
   return {
     messages,
     isConnected,
