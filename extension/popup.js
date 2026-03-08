@@ -3,6 +3,14 @@ const status = document.getElementById('status');
 const log = document.getElementById('log');
 const textInput = document.getElementById('textInput');
 const sendBtn = document.getElementById('sendBtn');
+const panelBtn = document.getElementById('panelBtn');
+
+// ── Open Side Panel ──
+panelBtn.addEventListener('click', () => {
+  chrome.runtime.sendMessage({ action: 'open_side_panel' }, (response) => {
+    if (response?.success) window.close(); // close popup after opening panel
+  });
+});
 
 // ── Config ──
 const SUPABASE_URL = 'https://umhqazctftqtyuocvnim.supabase.co';
