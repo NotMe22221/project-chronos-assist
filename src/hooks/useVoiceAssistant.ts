@@ -24,6 +24,31 @@ export const useVoiceAssistant = () => {
   const featuresRef = useRef(features);
   featuresRef.current = features;
   const prevVoiceRef = useRef(features.voiceResponses);
+  const conversationRef = useRef<ReturnType<typeof useConversation> | null>(null);
+
+  const fetchWeatherSummary = useCallback(async (rawCity: string) => {
+    const city = rawCity.trim().replace(/[?.!]+$/, '');
+    if (!city) return 'Please provide a city name.';
+
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+    const response = await fetch(`${supabaseUrl}/functions/v1/get-weather`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: supabaseKey,
+        Authorization: `Bearer ${supabaseKey}`,
+      },
+      body: JSON.stringify({ city }),
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+      return data?.error ? `Weather lookup failed: ${data.error}` : 'Weather lookup failed.';
+    }
+
+    return `Current weather in ${data.city}, ${data.country}: ${Math.round(data.temperature)}°C, ${data.description}. Feels like ${Math.round(data.feels_like)}°C with ${data.humidity}% humidity and wind speed of ${data.wind_speed} m/s.`;
+  }, []);
 
   const conversation = useConversation({
     clientTools: {
