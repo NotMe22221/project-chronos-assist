@@ -26,7 +26,7 @@ export const useVoiceAssistant = () => {
   const prevVoiceRef = useRef(features.voiceResponses);
   const conversationRef = useRef<ReturnType<typeof useConversation> | null>(null);
 
-  const postBrowserAction = useCallback((payload: { kind: 'open_url' | 'youtube_search' | 'google_search'; url?: string; query?: string }) => {
+  const postBrowserAction = useCallback((payload: { kind: 'open_url' | 'youtube_search' | 'google_search' | 'reload_page'; url?: string; query?: string }) => {
     try {
       if (window.parent !== window) {
         window.parent.postMessage({ type: 'jarvis-browser-action', ...payload }, '*');
