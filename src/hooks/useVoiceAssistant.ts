@@ -126,34 +126,59 @@ export const useVoiceAssistant = () => {
       if (type === 'user') {
         processVoiceCommand(text);
 
-        // Client-side fallback: open website commands
-        const openMatch = text.match(/\bopen\s+(.+)/i);
-        if (openMatch) {
-          const site = openMatch[1].trim().replace(/[?.!]+$/, '').toLowerCase();
-          // Map common names to URLs
-          const siteMap: Record<string, string> = {
-            youtube: 'https://www.youtube.com',
-            google: 'https://www.google.com',
-            gmail: 'https://mail.google.com',
-            twitter: 'https://www.twitter.com',
-            x: 'https://www.x.com',
-            facebook: 'https://www.facebook.com',
-            instagram: 'https://www.instagram.com',
-            reddit: 'https://www.reddit.com',
-            github: 'https://www.github.com',
-            linkedin: 'https://www.linkedin.com',
-            amazon: 'https://www.amazon.com',
-            netflix: 'https://www.netflix.com',
-            spotify: 'https://www.spotify.com',
-          };
-          const url = siteMap[site] || (site.includes('.') ? `https://${site}` : `https://www.${site}.com`);
-          console.log('Opening website:', url);
-          window.open(url, '_blank');
-          const confirmMsg = `Opened ${site} for you.`;
+        // Client-side fallback: browser commands
+        const ytSearchMatch = text.match(/\b(?:search|look up|find)\s+(.+?)\s+(?:on|in)\s+youtube\b/i);
+        const openYoutubeSearchMatch = text.match(/\bopen\s+youtube\s+(?:and\s+)?(?:search|search\s+for|search\s+up)\s+(.+)/i);
+
+        if (ytSearchMatch?.[1]) {
+          const query = ytSearchMatch[1].trim().replace(/[?.!]+$/, '');
+          const relayed = postBrowserAction({ kind: 'youtube_search', query });
+          if (!relayed) {
+            window.open(`https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`, '_blank');
+          }
           setMessages((prev) => [
             ...prev,
-            { id: `${Date.now()}-open`, text: confirmMsg, timestamp: new Date(), type: 'ai' },
+            { id: `${Date.now()}-ytsearch`, text: `Searching YouTube for ${query}.`, timestamp: new Date(), type: 'ai' },
           ]);
+        } else if (openYoutubeSearchMatch?.[1]) {
+          const query = openYoutubeSearchMatch[1].trim().replace(/[?.!]+$/, '');
+          const relayed = postBrowserAction({ kind: 'youtube_search', query });
+          if (!relayed) {
+            window.open(`https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`, '_blank');
+          }
+          setMessages((prev) => [
+            ...prev,
+            { id: `${Date.now()}-ytopensearch`, text: `Opening YouTube and searching for ${query}.`, timestamp: new Date(), type: 'ai' },
+          ]);
+        } else {
+          const openMatch = text.match(/\bopen\s+(.+)/i);
+          if (openMatch) {
+            const site = openMatch[1].trim().replace(/[?.!]+$/, '').toLowerCase();
+            const siteMap: Record<string, string> = {
+              youtube: 'https://www.youtube.com',
+              google: 'https://www.google.com',
+              gmail: 'https://mail.google.com',
+              twitter: 'https://www.twitter.com',
+              x: 'https://www.x.com',
+              facebook: 'https://www.facebook.com',
+              instagram: 'https://www.instagram.com',
+              reddit: 'https://www.reddit.com',
+              github: 'https://www.github.com',
+              linkedin: 'https://www.linkedin.com',
+              amazon: 'https://www.amazon.com',
+              netflix: 'https://www.netflix.com',
+              spotify: 'https://www.spotify.com',
+            };
+            const url = siteMap[site] || (site.includes('.') ? `https://${site}` : `https://www.${site}.com`);
+            const relayed = postBrowserAction({ kind: 'open_url', url });
+            if (!relayed) window.open(url, '_blank');
+
+            const confirmMsg = `Opened ${site} for you.`;
+            setMessages((prev) => [
+              ...prev,
+              { id: `${Date.now()}-open`, text: confirmMsg, timestamp: new Date(), type: 'ai' },
+            ]);
+          }
         }
 
         const weatherMatch = text.match(/\bweather\b(?:\s+(?:in|for))?\s+([a-zA-Z\s,.'-]+)/i);
