@@ -113,6 +113,7 @@ export const useHandTracking = (): HandTrackingResult => {
   const frameSkipCounterRef = useRef<number>(0);
   const performanceTimesRef = useRef<number[]>([]);
   const smoothCursorRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const prevRawCursorRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const cursorActivatedRef = useRef(false);
   const handLostTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastHandYRef = useRef<number | null>(null);
