@@ -377,5 +377,8 @@ export const useVoiceAssistant = () => {
     status: conversation.status,
     startConversation,
     endConversation,
+    agentPending,
+    agentRunning,
+    confirmAgentStep,
   };
 };
