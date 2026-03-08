@@ -56,11 +56,12 @@ export const HandTrackingInterface = () => {
       {/* Floating Cursor Overlay — hidden when hand tracking is disabled */}
       {cursorPosition.visible && !isDisabledByToggle && (
         <div
-          className="fixed z-[9999] pointer-events-none"
+          className="fixed z-[9999] pointer-events-none will-change-transform"
           style={{
-            left: cursorPosition.x - 12,
-            top: cursorPosition.y - 12,
-            transition: 'left 0.12s ease-out, top 0.12s ease-out',
+            transform: `translate3d(${cursorPosition.x - 12}px, ${cursorPosition.y - 12}px, 0)`,
+            left: 0,
+            top: 0,
+            transition: 'transform 0.06s linear',
           }}
         >
           <div className="w-6 h-6 rounded-full bg-primary/80 border-2 border-primary-foreground shadow-lg shadow-primary/40 animate-pulse" />

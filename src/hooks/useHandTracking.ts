@@ -84,13 +84,13 @@ export const useHandTracking = (): HandTrackingResult => {
     frameProcessingTime: 0, averageProcessingTime: 0, skippedFrames: 0, processedFrames: 0
   });
 
-  // UI sync timer — flush ref values to state at ~15fps for display
+  // UI sync timer — flush ref values to state at ~30fps for smoother cursor
   const uiSyncRAF = useRef<number | null>(null);
   const lastUISyncRef = useRef(0);
 
   const syncUIState = useCallback(() => {
     const now = performance.now();
-    if (now - lastUISyncRef.current < 66) return; // ~15fps UI updates
+    if (now - lastUISyncRef.current < 33) return; // ~30fps UI updates
     lastUISyncRef.current = now;
 
     const gs = gestureStateRef.current;
@@ -113,6 +113,7 @@ export const useHandTracking = (): HandTrackingResult => {
   const frameSkipCounterRef = useRef<number>(0);
   const performanceTimesRef = useRef<number[]>([]);
   const smoothCursorRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const prevRawCursorRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const cursorActivatedRef = useRef(false);
   const handLostTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastHandYRef = useRef<number | null>(null);
@@ -194,10 +195,11 @@ export const useHandTracking = (): HandTrackingResult => {
           const currentY = landmarks[0].y;
           if (lastHandYRef.current !== null) {
             const delta = currentY - lastHandYRef.current;
-            if (Math.abs(delta) > 0.008) {
-              const scrollAmount = delta * 800;
-              scrollVelocityRef.current = scrollAmount;
-              window.scrollBy({ top: scrollAmount });
+            if (Math.abs(delta) > 0.005) {
+              const targetVelocity = delta * 1000;
+              // Smooth velocity transition for less jerky scrolling
+              scrollVelocityRef.current = scrollVelocityRef.current * 0.6 + targetVelocity * 0.4;
+              window.scrollBy({ top: scrollVelocityRef.current });
               currentGestureRef.current = delta > 0 ? '👇 Scrolling DOWN' : '👆 Scrolling UP';
             }
           }
@@ -223,9 +225,15 @@ export const useHandTracking = (): HandTrackingResult => {
           const rawX = (1 - landmarks[8].x) * screen.w;
           const rawY = landmarks[8].y * screen.h;
 
+          // Velocity-adaptive smoothing: fast movements get less smoothing for responsiveness,
+          // slow movements get more smoothing for precision
           const prev = smoothCursorRef.current;
-          const rawDist = Math.hypot(rawX - prev.x, rawY - prev.y);
-          const smoothing = rawDist > 80 ? 0.5 : rawDist > 30 ? 0.35 : 0.2;
+          const prevRaw = prevRawCursorRef.current;
+          const velocity = Math.hypot(rawX - prevRaw.x, rawY - prevRaw.y);
+          prevRawCursorRef.current = { x: rawX, y: rawY };
+          
+          // Adaptive lerp: 0.15 for tiny movements (stable), 0.6 for fast sweeps (responsive)
+          const smoothing = Math.min(0.6, Math.max(0.15, velocity / 200));
           const smoothX = prev.x + (rawX - prev.x) * smoothing;
           const smoothY = prev.y + (rawY - prev.y) * smoothing;
           smoothCursorRef.current = { x: smoothX, y: smoothY };
@@ -286,16 +294,11 @@ export const useHandTracking = (): HandTrackingResult => {
   const onResults = useCallback((results: any) => {
     const frameStartTime = performance.now();
     
-    // Frame skipping
+    // Frame skipping — mobile only, skip every other frame
     if (isMobile) {
       frameSkipCounterRef.current++;
-      if (frameSkipCounterRef.current % 3 === 0) return;
+      if (frameSkipCounterRef.current % 2 === 0) return;
     }
-    
-    // Desktop: 30 FPS target
-    const now = performance.now();
-    if (!isMobile && now - frameThrottleRef.current < 33) return;
-    frameThrottleRef.current = now;
     
     if (!canvasRef.current || !videoRef.current) return;
     
