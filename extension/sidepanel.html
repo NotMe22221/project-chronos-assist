@@ -23,12 +23,21 @@
   ></iframe>
 
   <script>
-    // Relay hand tracking data from JARVIS iframe to background script → content script
+    // Relay events from JARVIS iframe to extension runtime
     window.addEventListener('message', (event) => {
-      if (event.data && event.data.type === 'jarvis-hand-tracking') {
+      if (!event.data) return;
+
+      if (event.data.type === 'jarvis-hand-tracking') {
         chrome.runtime.sendMessage({
           action: 'hand_tracking_data',
-          data: event.data
+          data: event.data,
+        });
+      }
+
+      if (event.data.type === 'jarvis-browser-action') {
+        chrome.runtime.sendMessage({
+          action: 'browser_action',
+          data: event.data,
         });
       }
     });
