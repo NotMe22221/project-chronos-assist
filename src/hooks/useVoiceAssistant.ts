@@ -12,12 +12,19 @@ interface ConversationMessage {
   type: 'user' | 'ai';
 }
 
+interface AgentStep {
+  step: number;
+  action: { action: string; selector?: string; text?: string; url?: string; description: string };
+}
+
 export const useVoiceAssistant = () => {
   const [messages, setMessages] = useState<ConversationMessage[]>([
     { id: '1', text: 'JARVIS online. Voice and gesture control ready.', timestamp: new Date(), type: 'ai' },
   ]);
   const [isConnecting, setIsConnecting] = useState(false);
   const [pendingDisconnect, setPendingDisconnect] = useState(false);
+  const [agentPending, setAgentPending] = useState<AgentStep | null>(null);
+  const [agentRunning, setAgentRunning] = useState(false);
   const { toast } = useToast();
   const { processVoiceCommand, features } = useFeatureToggle();
 
