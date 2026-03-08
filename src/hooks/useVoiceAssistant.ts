@@ -26,6 +26,18 @@ export const useVoiceAssistant = () => {
   const prevVoiceRef = useRef(features.voiceResponses);
   const conversationRef = useRef<ReturnType<typeof useConversation> | null>(null);
 
+  const postBrowserAction = useCallback((payload: { kind: 'open_url' | 'youtube_search' | 'google_search'; url?: string; query?: string }) => {
+    try {
+      if (window.parent !== window) {
+        window.parent.postMessage({ type: 'jarvis-browser-action', ...payload }, '*');
+        return true;
+      }
+    } catch (_) {
+      // no-op
+    }
+    return false;
+  }, []);
+
   const fetchWeatherSummary = useCallback(async (rawCity: string) => {
     const city = rawCity.trim().replace(/[?.!]+$/, '');
     if (!city) return 'Please provide a city name.';
