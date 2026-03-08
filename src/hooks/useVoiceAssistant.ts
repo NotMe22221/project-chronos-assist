@@ -26,7 +26,7 @@ export const useVoiceAssistant = () => {
   const prevVoiceRef = useRef(features.voiceResponses);
   const conversationRef = useRef<ReturnType<typeof useConversation> | null>(null);
 
-  const postBrowserAction = useCallback((payload: { kind: 'open_url' | 'youtube_search' | 'google_search'; url?: string; query?: string }) => {
+  const postBrowserAction = useCallback((payload: { kind: 'open_url' | 'youtube_search' | 'google_search' | 'reload_page'; url?: string; query?: string }) => {
     try {
       if (window.parent !== window) {
         window.parent.postMessage({ type: 'jarvis-browser-action', ...payload }, '*');
@@ -94,6 +94,11 @@ export const useVoiceAssistant = () => {
         if (!relayed) window.open(url, '_blank');
         return `Opening ${url}`;
       },
+      reloadPage: () => {
+        const relayed = postBrowserAction({ kind: 'reload_page' });
+        if (!relayed) window.location.reload();
+        return 'Reloading the page.';
+      },
       getWeather: async (params: { city: string }) => {
         try {
           return await fetchWeatherSummary(params?.city || '');
@@ -149,6 +154,13 @@ export const useVoiceAssistant = () => {
           setMessages((prev) => [
             ...prev,
             { id: `${Date.now()}-ytopensearch`, text: `Opening YouTube and searching for ${query}.`, timestamp: new Date(), type: 'ai' },
+          ]);
+        } else if (/\breload\b.*\bpage\b|\brefresh\b.*\bpage\b|\breload\b.*\btab\b|\brefresh\b.*\btab\b/i.test(text)) {
+          const relayed = postBrowserAction({ kind: 'reload_page' });
+          if (!relayed) window.location.reload();
+          setMessages((prev) => [
+            ...prev,
+            { id: `${Date.now()}-reload`, text: 'Reloading the page.', timestamp: new Date(), type: 'ai' },
           ]);
         } else {
           const openMatch = text.match(/\bopen\s+(.+)/i);
