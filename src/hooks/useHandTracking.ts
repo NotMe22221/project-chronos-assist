@@ -195,10 +195,11 @@ export const useHandTracking = (): HandTrackingResult => {
           const currentY = landmarks[0].y;
           if (lastHandYRef.current !== null) {
             const delta = currentY - lastHandYRef.current;
-            if (Math.abs(delta) > 0.008) {
-              const scrollAmount = delta * 800;
-              scrollVelocityRef.current = scrollAmount;
-              window.scrollBy({ top: scrollAmount });
+            if (Math.abs(delta) > 0.005) {
+              const targetVelocity = delta * 1000;
+              // Smooth velocity transition for less jerky scrolling
+              scrollVelocityRef.current = scrollVelocityRef.current * 0.6 + targetVelocity * 0.4;
+              window.scrollBy({ top: scrollVelocityRef.current });
               currentGestureRef.current = delta > 0 ? '👇 Scrolling DOWN' : '👆 Scrolling UP';
             }
           }
