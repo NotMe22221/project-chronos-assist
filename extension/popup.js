@@ -59,16 +59,20 @@ textInput.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') sendBtn.click();
 });
 
-function startListening() {
+async function startListening() {
   try {
+    // Explicitly request mic permission first
+    await navigator.mediaDevices.getUserMedia({ audio: true });
     recognition.start();
     listening = true;
     startBtn.textContent = '🔴 Stop Listening';
     startBtn.classList.add('active');
     status.textContent = 'Listening... speak a command';
   } catch (e) {
-    status.textContent = 'Error starting microphone';
-    console.error(e);
+    console.error('Mic permission error:', e);
+    status.textContent = e.name === 'NotAllowedError'
+      ? '⚠️ Microphone blocked — allow mic access in Chrome settings'
+      : 'Error starting microphone';
   }
 }
 
