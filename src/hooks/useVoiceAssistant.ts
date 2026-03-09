@@ -46,6 +46,19 @@ export const useVoiceAssistant = () => {
     return false;
   }, []);
 
+  // Mark-X style intent posting to extension
+  const postIntent = useCallback((intent: string, parameters: Record<string, string>) => {
+    try {
+      if (window.parent !== window) {
+        window.parent.postMessage({ type: 'jarvis-intent', intent, parameters }, '*');
+        return true;
+      }
+    } catch (_) {
+      // no-op
+    }
+    return false;
+  }, []);
+
   const postAgentTask = useCallback((task: string) => {
     try {
       if (window.parent !== window) {
