@@ -225,8 +225,8 @@ export const useVoiceAssistant = () => {
           setIsConnecting(false);
           conversationRef.current = null;
         },
-        onModeChange: ({ mode }: { mode: { mode: 'speaking' | 'listening' } }) => {
-          const speaking = mode.mode === 'speaking';
+        onModeChange: ({ mode }: { mode: string }) => {
+          const speaking = mode === 'speaking';
           setIsSpeaking(speaking);
           // Auto-disconnect after JARVIS says goodbye
           if (pendingDisconnectRef.current && !speaking) {
