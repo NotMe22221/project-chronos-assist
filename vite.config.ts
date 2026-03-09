@@ -18,11 +18,15 @@ export default defineConfig(({ mode }) => ({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      // Force ALL react imports (including from @elevenlabs/react) to use the same instance
+      "react": path.resolve(__dirname, "./node_modules/react"),
+      "react-dom": path.resolve(__dirname, "./node_modules/react-dom"),
+      "react/jsx-runtime": path.resolve(__dirname, "./node_modules/react/jsx-runtime"),
     },
-    dedupe: ['react', 'react-dom', 'react/jsx-runtime', '@elevenlabs/react'],
+    dedupe: ['react', 'react-dom', 'react/jsx-runtime'],
   },
-  // Make sure Vite pre-bundles a single version of React/ReactDOM
   optimizeDeps: {
-    include: ['react', 'react-dom'],
+    include: ['react', 'react-dom', 'react/jsx-runtime', '@elevenlabs/react'],
+    force: true,
   },
 }));
