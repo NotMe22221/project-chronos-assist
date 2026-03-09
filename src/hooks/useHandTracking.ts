@@ -365,13 +365,14 @@ export const useHandTracking = (): HandTrackingResult => {
       }
       lastGestureRef.current = gesture;
     } else {
-      // Hand lost — momentum scrolling
+      // Hand lost — momentum scrolling (relay to extension only)
       if (lastGestureRef.current === 'scroll' && Math.abs(scrollVelocityRef.current) > 1) {
         if (!scrollMomentumRAF.current) {
           const decelerate = () => {
             scrollVelocityRef.current *= 0.92;
             if (Math.abs(scrollVelocityRef.current) > 0.5) {
-              window.scrollBy({ top: scrollVelocityRef.current });
+              // Relay momentum scroll to webpage via extension - no local scroll
+              postToParent({ gesture: 'scroll', velocity: scrollVelocityRef.current });
               scrollMomentumRAF.current = requestAnimationFrame(decelerate);
             } else {
               scrollVelocityRef.current = 0;
