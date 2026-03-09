@@ -18,6 +18,11 @@ window.addEventListener('message', (event) => {
     });
   }
 
+  // ── Mark-X Style Intent Handling ──
+  if (event.data.type === 'jarvis-intent') {
+    handleMarkXIntent(event.data);
+  }
+
   // ── Browser Agent: Start automation task ──
   if (event.data.type === 'jarvis-agent-task') {
     runAgentLoop(event.data.task);
@@ -49,6 +54,81 @@ window.addEventListener('message', (event) => {
     });
   }
 });
+
+// ═══════════════════════════════════════════════
+// Mark-X Style Intent Handler
+// ═══════════════════════════════════════════════
+
+function handleMarkXIntent(data) {
+  const { intent, parameters } = data;
+
+  switch (intent) {
+    case 'open_url':
+      if (parameters?.url) {
+        chrome.tabs.create({ url: parameters.url });
+        sendToIframe({
+          type: 'jarvis-intent-result',
+          success: true,
+          message: `Opened ${parameters.url}`,
+        });
+      }
+      break;
+
+    case 'google_search':
+      if (parameters?.query) {
+        const gUrl = `https://www.google.com/search?q=${encodeURIComponent(parameters.query)}`;
+        chrome.tabs.create({ url: gUrl });
+        sendToIframe({
+          type: 'jarvis-intent-result',
+          success: true,
+          message: `Searching Google for: ${parameters.query}`,
+        });
+      }
+      break;
+
+    case 'youtube_search':
+      if (parameters?.query) {
+        const ytUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(parameters.query)}`;
+        chrome.tabs.create({ url: ytUrl });
+        sendToIframe({
+          type: 'jarvis-intent-result',
+          success: true,
+          message: `Searching YouTube for: ${parameters.query}`,
+        });
+      }
+      break;
+
+    case 'weather_report':
+      if (parameters?.city) {
+        const time = parameters.time || 'today';
+        const weatherUrl = `https://www.google.com/search?q=weather+in+${encodeURIComponent(parameters.city)}+${encodeURIComponent(time)}`;
+        chrome.tabs.create({ url: weatherUrl });
+        sendToIframe({
+          type: 'jarvis-intent-result',
+          success: true,
+          message: `Showing weather for ${parameters.city}`,
+        });
+      }
+      break;
+
+    case 'reload_page':
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        if (tabs[0]?.id) {
+          chrome.tabs.reload(tabs[0].id);
+          sendToIframe({
+            type: 'jarvis-intent-result',
+            success: true,
+            message: 'Page reloaded',
+          });
+        }
+      });
+      break;
+
+    default:
+      // Chat intent - no action needed
+      break;
+  }
+}
 
 // ═══════════════════════════════════════════════
 // Browser Agent Orchestration Loop
