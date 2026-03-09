@@ -2,6 +2,7 @@
 import { DataVisualization } from "@/components/DataVisualization";
 import { HandTrackingInterface } from "@/components/HandTrackingInterface";
 import { VoiceAssistant } from "@/components/VoiceAssistant";
+import { BookmarksPanel } from "@/components/BookmarksPanel";
 
 const Index = () => {
   return (
@@ -15,7 +16,7 @@ const Index = () => {
           </p>
         </div>
         
-        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-6">
           {/* Voice Assistant */}
           <div className="xl:col-span-1">
             <VoiceAssistant />
@@ -24,6 +25,11 @@ const Index = () => {
           {/* Hand Tracking */}
           <div className="xl:col-span-1">
             <HandTrackingInterface />
+          </div>
+          
+          {/* Bookmarks Panel */}
+          <div className="xl:col-span-1">
+            <BookmarksPanel />
           </div>
           
           {/* Data Visualization */}
@@ -37,3 +43,4 @@ const Index = () => {
 };
 
 export default Index;
+
