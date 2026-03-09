@@ -134,4 +134,39 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     });
     return true;
   }
+
+  // ═══════════════════════════════════════════════
+  // Bookmarks API: Get bookmarks tree
+  // ═══════════════════════════════════════════════
+  if (message.action === 'get_bookmarks') {
+    chrome.bookmarks.getTree((tree) => {
+      const bookmarks = flattenBookmarks(tree);
+      sendResponse({ bookmarks });
+    });
+    return true;
+  }
+
+  // Open a bookmark by URL
+  if (message.action === 'open_bookmark') {
+    chrome.tabs.create({ url: message.url });
+    sendResponse({ success: true });
+    return false;
+  }
 });
+
+// Helper to flatten bookmark tree
+function flattenBookmarks(nodes, result = []) {
+  for (const node of nodes) {
+    if (node.url) {
+      result.push({
+        id: node.id,
+        title: node.title,
+        url: node.url,
+      });
+    }
+    if (node.children) {
+      flattenBookmarks(node.children, result);
+    }
+  }
+  return result;
+}

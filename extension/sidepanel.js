@@ -30,6 +30,24 @@ window.addEventListener('message', (event) => {
       pendingResolve = null;
     }
   }
+
+  // ── Bookmarks: Request bookmarks list ──
+  if (event.data.type === 'jarvis-get-bookmarks') {
+    chrome.runtime.sendMessage({ action: 'get_bookmarks' }, (response) => {
+      sendToIframe({
+        type: 'jarvis-bookmarks-list',
+        bookmarks: response?.bookmarks || [],
+      });
+    });
+  }
+
+  // ── Bookmarks: Open a bookmark ──
+  if (event.data.type === 'jarvis-open-bookmark') {
+    chrome.runtime.sendMessage({
+      action: 'open_bookmark',
+      url: event.data.url,
+    });
+  }
 });
 
 // ═══════════════════════════════════════════════

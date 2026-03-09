@@ -3,7 +3,7 @@
   "name": "JARVIS Voice Assistant",
   "version": "1.2",
   "description": "Voice-controlled browser automation and AI assistant powered by JARVIS",
-  "permissions": ["tabs", "activeTab", "scripting", "bookmarks", "sidePanel"],
+  "permissions": ["tabs", "activeTab", "scripting", "bookmarks", "sidePanel", "storage"],
   "icons": {
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",
