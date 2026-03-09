@@ -1,4 +1,4 @@
-import { Conversation } from '@elevenlabs/client';
+import { useConversation } from '@elevenlabs/react';
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { useFeatureToggle } from '@/contexts/FeatureToggleContext';
@@ -21,10 +21,7 @@ export const useVoiceAssistant = () => {
   const [messages, setMessages] = useState<ConversationMessage[]>([
     { id: '1', text: 'JARVIS online. Voice and gesture control ready.', timestamp: new Date(), type: 'ai' },
   ]);
-  const [isConnected, setIsConnected] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
-  const [isSpeaking, setIsSpeaking] = useState(false);
-  const [status, setStatus] = useState<string>('disconnected');
   const [agentPending, setAgentPending] = useState<AgentStep | null>(null);
   const [agentRunning, setAgentRunning] = useState(false);
 
@@ -33,12 +30,9 @@ export const useVoiceAssistant = () => {
 
   const featuresRef = useRef(features);
   featuresRef.current = features;
-  // Use @elevenlabs/client Conversation directly — no React bundled inside
-  const conversationRef = useRef<Conversation | null>(null);
   const agentRunningRef = useRef(false);
   const pendingDisconnectRef = useRef(false);
 
-  // Stable callback refs so startSession closures are never stale
   const processVoiceCommandRef = useRef(processVoiceCommand);
   processVoiceCommandRef.current = processVoiceCommand;
 
@@ -130,6 +124,192 @@ export const useVoiceAssistant = () => {
   const postAgentTaskRef = useRef(postAgentTask);
   postAgentTaskRef.current = postAgentTask;
 
+  const conversation = useConversation({
+    clientTools: {
+      enableHandTracking: () => {
+        if (featuresRef.current.handTracking) return 'Hand tracking is already enabled.';
+        processVoiceCommandRef.current('start hand tracking');
+        return 'Hand tracking enabled.';
+      },
+      disableHandTracking: () => {
+        if (!featuresRef.current.handTracking) return 'Hand tracking is already disabled.';
+        processVoiceCommandRef.current('stop hand tracking');
+        return 'Hand tracking disabled.';
+      },
+      enableVoice: () => {
+        if (featuresRef.current.voiceResponses) return 'Voice responses are already enabled.';
+        processVoiceCommandRef.current('start talking');
+        return 'Voice responses enabled.';
+      },
+      disableVoice: () => {
+        if (!featuresRef.current.voiceResponses) return 'Voice responses are already disabled.';
+        processVoiceCommandRef.current('stop talking');
+        return 'Voice responses disabled.';
+      },
+      disconnectCall: () => {
+        pendingDisconnectRef.current = true;
+        return 'Goodbye! Disconnecting now.';
+      },
+      openWebsite: (params: { url: string }) => {
+        const url = params.url.startsWith('http') ? params.url : `https://${params.url}`;
+        const relayed = postBrowserActionRef.current({ kind: 'open_url', url });
+        if (!relayed) window.open(url, '_blank');
+        return `Opening ${url}`;
+      },
+      browserAgent: (params: { task: string }) => {
+        const relayed = postAgentTaskRef.current(params.task);
+        if (!relayed) return 'Browser agent requires the JARVIS extension side panel. Please open JARVIS from the extension.';
+        return `Starting browser task: ${params.task}. I'll show you each step for confirmation.`;
+      },
+      reloadPage: () => {
+        const relayed = postBrowserActionRef.current({ kind: 'reload_page' });
+        if (!relayed) window.location.reload();
+        return 'Reloading the page.';
+      },
+      getWeather: async (params: { city: string }) => {
+        try {
+          return await fetchWeatherSummaryRef.current(params?.city || '');
+        } catch (error) {
+          console.error('🌤️ getWeather error:', error);
+          return 'I could not retrieve weather data right now.';
+        }
+      },
+    },
+    onConnect: () => {
+      setIsConnecting(false);
+      toast({ title: 'JARVIS Connected', description: 'Voice assistant is active' });
+    },
+    onDisconnect: () => {
+      setIsConnecting(false);
+    },
+    onMessage: (message: any) => {
+      // Handle different message types from the ElevenLabs SDK
+      if (message.type === 'user_transcript' || message.source === 'user') {
+        const text = message.user_transcription_event?.user_transcript || message.message || '';
+        if (!text.trim()) return;
+
+        processVoiceCommandRef.current(text);
+        setMessages(prev => [...prev, { id: Date.now().toString(), text, timestamp: new Date(), type: 'user' }]);
+
+        // Regex-based fallback processing for browser actions
+        handleUserTranscript(text);
+      } else if (message.type === 'agent_response' || message.source === 'ai') {
+        const text = message.agent_response_event?.agent_response || message.message || '';
+        if (!text.trim()) return;
+        setMessages(prev => [...prev, { id: Date.now().toString(), text, timestamp: new Date(), type: 'ai' }]);
+      }
+    },
+    onError: (error: unknown) => {
+      console.error('Voice assistant error:', error);
+      setIsConnecting(false);
+      toast({
+        title: 'Voice Error',
+        description: typeof error === 'string' ? error : 'Connection error',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  // Handle auto-disconnect after goodbye
+  useEffect(() => {
+    if (pendingDisconnectRef.current && !conversation.isSpeaking) {
+      pendingDisconnectRef.current = false;
+      conversation.endSession().catch(console.error);
+    }
+  }, [conversation.isSpeaking]);
+
+  function handleUserTranscript(text: string) {
+    const ytSearchMatch = text.match(/\b(?:search|look up|find)\s+(.+?)\s+(?:on|in)\s+youtube\b/i);
+    const openYoutubeSearchMatch = text.match(/\bopen\s+youtube\s+(?:and\s+)?(?:search|search\s+for|search\s+up)\s+(.+)/i);
+
+    if (ytSearchMatch?.[1]) {
+      const query = ytSearchMatch[1].trim().replace(/[?.!]+$/, '');
+      const relayed = postBrowserActionRef.current({ kind: 'youtube_search', query });
+      if (!relayed) window.open(`https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`, '_blank');
+      setMessages(prev => [...prev, { id: `${Date.now()}-ytsearch`, text: `Searching YouTube for ${query}.`, timestamp: new Date(), type: 'ai' }]);
+    } else if (openYoutubeSearchMatch?.[1]) {
+      const query = openYoutubeSearchMatch[1].trim().replace(/[?.!]+$/, '');
+      const relayed = postBrowserActionRef.current({ kind: 'youtube_search', query });
+      if (!relayed) window.open(`https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`, '_blank');
+      setMessages(prev => [...prev, { id: `${Date.now()}-ytopensearch`, text: `Opening YouTube and searching for ${query}.`, timestamp: new Date(), type: 'ai' }]);
+    } else if (/\breload\b.*\bpage\b|\brefresh\b.*\bpage\b|\breload\b.*\btab\b|\brefresh\b.*\btab\b/i.test(text)) {
+      const relayed = postBrowserActionRef.current({ kind: 'reload_page' });
+      if (!relayed) window.location.reload();
+      setMessages(prev => [...prev, { id: `${Date.now()}-reload`, text: 'Reloading the page.', timestamp: new Date(), type: 'ai' }]);
+    } else {
+      const openMatch = text.match(/\bopen\s+(.+)/i);
+      if (openMatch) {
+        const rawSite = openMatch[1].trim().replace(/[?.!]+$/, '');
+        const site = rawSite.toLowerCase();
+        const ytFallback = site.match(/youtube\s+(?:and\s+)?(?:search|search\s+for|search\s+up|look\s+up|find)\s+(.+)/i);
+        if (ytFallback?.[1]) {
+          const query = ytFallback[1].trim();
+          const relayed = postBrowserActionRef.current({ kind: 'youtube_search', query });
+          if (!relayed) window.open(`https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`, '_blank');
+          setMessages(prev => [...prev, { id: `${Date.now()}-ytfallback`, text: `Searching YouTube for ${query}.`, timestamp: new Date(), type: 'ai' }]);
+        } else {
+          const siteMap: Record<string, string> = {
+            youtube: 'https://www.youtube.com',
+            google: 'https://www.google.com',
+            gmail: 'https://mail.google.com',
+            twitter: 'https://www.twitter.com',
+            x: 'https://www.x.com',
+            facebook: 'https://www.facebook.com',
+            instagram: 'https://www.instagram.com',
+            reddit: 'https://www.reddit.com',
+            github: 'https://www.github.com',
+            linkedin: 'https://www.linkedin.com',
+            amazon: 'https://www.amazon.com',
+            netflix: 'https://www.netflix.com',
+            spotify: 'https://www.spotify.com',
+          };
+          const url = siteMap[site] || (site.includes('.') ? `https://${site}` : `https://www.${site}.com`);
+          const relayed = postBrowserActionRef.current({ kind: 'open_url', url });
+          if (!relayed) window.open(url, '_blank');
+          setMessages(prev => [...prev, { id: `${Date.now()}-open`, text: `Opened ${site} for you.`, timestamp: new Date(), type: 'ai' }]);
+        }
+      }
+    }
+
+    // Agent task patterns
+    const agentPatterns = [
+      /\bclick\s+(?:on\s+)?(?:the\s+|my\s+)?(.+)/i,
+      /\btap\s+(?:on\s+)?(?:the\s+|my\s+)?(.+)/i,
+      /\btype\s+(.+?)\s+(?:in|into)\s+(.+)/i,
+      /\bfill\s+(?:in\s+)?(?:the\s+)?(.+)/i,
+      /\bselect\s+(.+)/i,
+      /\bpress\s+(.+)/i,
+      /\bscroll\s+(?:down|up|to\s+.+)/i,
+      /\bfind\s+(?:the\s+)?(.+?)\s+(?:button|link|tab|menu|option|field|input)/i,
+      /\bgo\s+to\s+(.+?)\s+and\s+(.+)/i,
+      /\bnavigate\s+to\s+(.+?)\s+(?:and|then)\s+(.+)/i,
+      /\blog\s*(?:in|into)\b/i,
+      /\bsign\s*(?:in|into|up)\b/i,
+    ];
+    const isAgentTask = agentPatterns.some(p => p.test(text));
+    if (isAgentTask && !agentRunningRef.current) {
+      const relayed = postAgentTaskRef.current(text);
+      if (relayed) {
+        setMessages(prev => [...prev, { id: `${Date.now()}-agent-auto`, text: `🤖 Starting browser task: ${text}`, timestamp: new Date(), type: 'ai' }]);
+      }
+    }
+
+    // Weather detection
+    const weatherMatch = text.match(/\bweather\b(?:\s+(?:in|for))?\s+([a-zA-Z\s,.'-]+)/i);
+    const city = weatherMatch?.[1]?.trim();
+    if (city) {
+      fetchWeatherSummaryRef.current(city)
+        .then(weatherSummary => {
+          setMessages(prev => [...prev, { id: `${Date.now()}-weather`, text: weatherSummary, timestamp: new Date(), type: 'ai' }]);
+          if (featuresRef.current.voiceResponses && 'speechSynthesis' in window) {
+            window.speechSynthesis.cancel();
+            window.speechSynthesis.speak(new SpeechSynthesisUtterance(weatherSummary));
+          }
+        })
+        .catch(error => console.error('Weather fallback failed:', error));
+    }
+  }
+
   const startConversation = useCallback(async () => {
     setIsConnecting(true);
     try {
@@ -160,195 +340,10 @@ export const useVoiceAssistant = () => {
       console.log('Got signed URL, requesting microphone...');
       await navigator.mediaDevices.getUserMedia({ audio: true });
 
-      const conv = await Conversation.startSession({
+      // Start session using the useConversation hook
+      await conversation.startSession({
         signedUrl: data.signed_url,
-        clientTools: {
-          enableHandTracking: () => {
-            if (featuresRef.current.handTracking) return 'Hand tracking is already enabled.';
-            processVoiceCommandRef.current('start hand tracking');
-            return 'Hand tracking enabled.';
-          },
-          disableHandTracking: () => {
-            if (!featuresRef.current.handTracking) return 'Hand tracking is already disabled.';
-            processVoiceCommandRef.current('stop hand tracking');
-            return 'Hand tracking disabled.';
-          },
-          enableVoice: () => {
-            if (featuresRef.current.voiceResponses) return 'Voice responses are already enabled.';
-            processVoiceCommandRef.current('start talking');
-            return 'Voice responses enabled.';
-          },
-          disableVoice: () => {
-            if (!featuresRef.current.voiceResponses) return 'Voice responses are already disabled.';
-            processVoiceCommandRef.current('stop talking');
-            return 'Voice responses disabled.';
-          },
-          disconnectCall: () => {
-            pendingDisconnectRef.current = true;
-            return 'Goodbye! Disconnecting now.';
-          },
-          openWebsite: (params: { url: string }) => {
-            const url = params.url.startsWith('http') ? params.url : `https://${params.url}`;
-            const relayed = postBrowserActionRef.current({ kind: 'open_url', url });
-            if (!relayed) window.open(url, '_blank');
-            return `Opening ${url}`;
-          },
-          browserAgent: (params: { task: string }) => {
-            const relayed = postAgentTaskRef.current(params.task);
-            if (!relayed) return 'Browser agent requires the JARVIS extension side panel. Please open JARVIS from the extension.';
-            return `Starting browser task: ${params.task}. I'll show you each step for confirmation.`;
-          },
-          reloadPage: () => {
-            const relayed = postBrowserActionRef.current({ kind: 'reload_page' });
-            if (!relayed) window.location.reload();
-            return 'Reloading the page.';
-          },
-          getWeather: async (params: { city: string }) => {
-            try {
-              return await fetchWeatherSummaryRef.current(params?.city || '');
-            } catch (error) {
-              console.error('🌤️ getWeather error:', error);
-              return 'I could not retrieve weather data right now.';
-            }
-          },
-        },
-        onConnect: () => {
-          setIsConnected(true);
-          setStatus('connected');
-          setIsConnecting(false);
-          toast({ title: 'JARVIS Connected', description: 'Voice assistant is active' });
-        },
-        onDisconnect: () => {
-          setIsConnected(false);
-          setIsSpeaking(false);
-          setStatus('disconnected');
-          setIsConnecting(false);
-          conversationRef.current = null;
-        },
-        onModeChange: ({ mode }: { mode: string }) => {
-          const speaking = mode === 'speaking';
-          setIsSpeaking(speaking);
-          // Auto-disconnect after JARVIS says goodbye
-          if (pendingDisconnectRef.current && !speaking) {
-            pendingDisconnectRef.current = false;
-            conversationRef.current?.endSession().catch(console.error);
-          }
-        },
-        onMessage: (props: { message: string; source: string }) => {
-          const text = props?.message ?? '';
-          if (!text.trim()) return;
-
-          const type: 'user' | 'ai' = props.source === 'user' ? 'user' : 'ai';
-
-          if (type === 'user') {
-            processVoiceCommandRef.current(text);
-
-            const ytSearchMatch = text.match(/\b(?:search|look up|find)\s+(.+?)\s+(?:on|in)\s+youtube\b/i);
-            const openYoutubeSearchMatch = text.match(/\bopen\s+youtube\s+(?:and\s+)?(?:search|search\s+for|search\s+up)\s+(.+)/i);
-
-            if (ytSearchMatch?.[1]) {
-              const query = ytSearchMatch[1].trim().replace(/[?.!]+$/, '');
-              const relayed = postBrowserActionRef.current({ kind: 'youtube_search', query });
-              if (!relayed) window.open(`https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`, '_blank');
-              setMessages(prev => [...prev, { id: `${Date.now()}-ytsearch`, text: `Searching YouTube for ${query}.`, timestamp: new Date(), type: 'ai' }]);
-            } else if (openYoutubeSearchMatch?.[1]) {
-              const query = openYoutubeSearchMatch[1].trim().replace(/[?.!]+$/, '');
-              const relayed = postBrowserActionRef.current({ kind: 'youtube_search', query });
-              if (!relayed) window.open(`https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`, '_blank');
-              setMessages(prev => [...prev, { id: `${Date.now()}-ytopensearch`, text: `Opening YouTube and searching for ${query}.`, timestamp: new Date(), type: 'ai' }]);
-            } else if (/\breload\b.*\bpage\b|\brefresh\b.*\bpage\b|\breload\b.*\btab\b|\brefresh\b.*\btab\b/i.test(text)) {
-              const relayed = postBrowserActionRef.current({ kind: 'reload_page' });
-              if (!relayed) window.location.reload();
-              setMessages(prev => [...prev, { id: `${Date.now()}-reload`, text: 'Reloading the page.', timestamp: new Date(), type: 'ai' }]);
-            } else {
-              const openMatch = text.match(/\bopen\s+(.+)/i);
-              if (openMatch) {
-                const rawSite = openMatch[1].trim().replace(/[?.!]+$/, '');
-                const site = rawSite.toLowerCase();
-                const ytFallback = site.match(/youtube\s+(?:and\s+)?(?:search|search\s+for|search\s+up|look\s+up|find)\s+(.+)/i);
-                if (ytFallback?.[1]) {
-                  const query = ytFallback[1].trim();
-                  const relayed = postBrowserActionRef.current({ kind: 'youtube_search', query });
-                  if (!relayed) window.open(`https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`, '_blank');
-                  setMessages(prev => [...prev, { id: `${Date.now()}-ytfallback`, text: `Searching YouTube for ${query}.`, timestamp: new Date(), type: 'ai' }]);
-                } else {
-                  const siteMap: Record<string, string> = {
-                    youtube: 'https://www.youtube.com',
-                    google: 'https://www.google.com',
-                    gmail: 'https://mail.google.com',
-                    twitter: 'https://www.twitter.com',
-                    x: 'https://www.x.com',
-                    facebook: 'https://www.facebook.com',
-                    instagram: 'https://www.instagram.com',
-                    reddit: 'https://www.reddit.com',
-                    github: 'https://www.github.com',
-                    linkedin: 'https://www.linkedin.com',
-                    amazon: 'https://www.amazon.com',
-                    netflix: 'https://www.netflix.com',
-                    spotify: 'https://www.spotify.com',
-                  };
-                  const url = siteMap[site] || (site.includes('.') ? `https://${site}` : `https://www.${site}.com`);
-                  const relayed = postBrowserActionRef.current({ kind: 'open_url', url });
-                  if (!relayed) window.open(url, '_blank');
-                  setMessages(prev => [...prev, { id: `${Date.now()}-open`, text: `Opened ${site} for you.`, timestamp: new Date(), type: 'ai' }]);
-                }
-              }
-            }
-
-            // Agent task patterns
-            const agentPatterns = [
-              /\bclick\s+(?:on\s+)?(?:the\s+|my\s+)?(.+)/i,
-              /\btap\s+(?:on\s+)?(?:the\s+|my\s+)?(.+)/i,
-              /\btype\s+(.+?)\s+(?:in|into)\s+(.+)/i,
-              /\bfill\s+(?:in\s+)?(?:the\s+)?(.+)/i,
-              /\bselect\s+(.+)/i,
-              /\bpress\s+(.+)/i,
-              /\bscroll\s+(?:down|up|to\s+.+)/i,
-              /\bfind\s+(?:the\s+)?(.+?)\s+(?:button|link|tab|menu|option|field|input)/i,
-              /\bgo\s+to\s+(.+?)\s+and\s+(.+)/i,
-              /\bnavigate\s+to\s+(.+?)\s+(?:and|then)\s+(.+)/i,
-              /\blog\s*(?:in|into)\b/i,
-              /\bsign\s*(?:in|into|up)\b/i,
-            ];
-            const isAgentTask = agentPatterns.some(p => p.test(text));
-            if (isAgentTask && !agentRunningRef.current) {
-              const relayed = postAgentTaskRef.current(text);
-              if (relayed) {
-                setMessages(prev => [...prev, { id: `${Date.now()}-agent-auto`, text: `🤖 Starting browser task: ${text}`, timestamp: new Date(), type: 'ai' }]);
-              }
-            }
-
-            // Weather detection
-            const weatherMatch = text.match(/\bweather\b(?:\s+(?:in|for))?\s+([a-zA-Z\s,.'-]+)/i);
-            const city = weatherMatch?.[1]?.trim();
-            if (city) {
-              fetchWeatherSummaryRef.current(city)
-                .then(weatherSummary => {
-                  setMessages(prev => [...prev, { id: `${Date.now()}-weather`, text: weatherSummary, timestamp: new Date(), type: 'ai' }]);
-                  if (featuresRef.current.voiceResponses && 'speechSynthesis' in window) {
-                    window.speechSynthesis.cancel();
-                    window.speechSynthesis.speak(new SpeechSynthesisUtterance(weatherSummary));
-                  }
-                  conversationRef.current?.sendContextualUpdate?.(`Live weather lookup result: ${weatherSummary}`);
-                })
-                .catch(error => console.error('Weather fallback failed:', error));
-            }
-          }
-
-          setMessages(prev => [...prev, { id: Date.now().toString(), text, timestamp: new Date(), type }]);
-        },
-        onError: (error: unknown) => {
-          console.error('Voice assistant error:', error);
-          setIsConnecting(false);
-          toast({
-            title: 'Voice Error',
-            description: typeof error === 'string' ? error : 'Connection error',
-            variant: 'destructive',
-          });
-        },
       });
-
-      conversationRef.current = conv;
     } catch (err) {
       setIsConnecting(false);
       console.error('Failed to start voice assistant:', err);
@@ -359,33 +354,33 @@ export const useVoiceAssistant = () => {
         variant: 'destructive',
       });
     }
-  }, [toast]);
+  }, [toast, conversation]);
 
   const endConversation = useCallback(async () => {
     try {
-      await conversationRef.current?.endSession();
+      await conversation.endSession();
     } catch (err) {
       console.error('Failed to end conversation:', err);
     }
-  }, []);
+  }, [conversation]);
 
   // Mute/unmute when voice toggle changes
   useEffect(() => {
-    if (isConnected && conversationRef.current) {
+    if (conversation.status === 'connected') {
       try {
-        conversationRef.current.setVolume({ volume: features.voiceResponses ? 1 : 0 });
+        conversation.setVolume({ volume: features.voiceResponses ? 1 : 0 });
       } catch (e) {
         console.error('Volume update failed:', e);
       }
     }
-  }, [features.voiceResponses, isConnected]);
+  }, [features.voiceResponses, conversation.status]);
 
   return {
     messages,
-    isConnected,
+    isConnected: conversation.status === 'connected',
     isConnecting,
-    isSpeaking,
-    status,
+    isSpeaking: conversation.isSpeaking,
+    status: conversation.status,
     startConversation,
     endConversation,
     agentPending,
