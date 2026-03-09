@@ -282,10 +282,40 @@ function moveCursor(nx, ny) {
   }
 }
 
+// Click debounce to prevent rapid multiple clicks
+let lastClickTime = 0;
+const CLICK_DEBOUNCE_MS = 400;
+
 function clickAtCursor() {
   if (!cursorVisible) return;
+  
+  // Debounce rapid clicks
+  const now = Date.now();
+  if (now - lastClickTime < CLICK_DEBOUNCE_MS) {
+    console.log('[JARVIS] Click ignored - debounce');
+    return;
+  }
+  lastClickTime = now;
+  
+  // Hide cursor temporarily to avoid elementFromPoint hitting it
+  if (cursorEl) cursorEl.style.display = 'none';
+  
   const el = document.elementFromPoint(smoothX, smoothY);
-  if (!el) return;
+  
+  // Restore cursor
+  if (cursorEl) cursorEl.style.display = '';
+  
+  if (!el) {
+    console.log('[JARVIS] No element at cursor position');
+    return;
+  }
+  
+  // Find the best clickable element (might be a parent)
+  const clickable = el.closest('a, button, [role="button"], [role="link"], input[type="submit"], input[type="button"], [onclick], [tabindex], summary, details, label') || el;
+  
+  console.log('[JARVIS] Clicking element:', clickable.tagName, clickable.textContent?.substring(0, 30));
+  
+  // Show ripple effect
   const ripple = document.createElement('div');
   Object.assign(ripple.style, {
     position: 'fixed',
@@ -294,16 +324,54 @@ function clickAtCursor() {
     width: '40px',
     height: '40px',
     borderRadius: '50%',
-    border: '2px solid rgba(59, 130, 246, 0.8)',
-    background: 'rgba(59, 130, 246, 0.2)',
+    border: '3px solid rgba(34, 197, 94, 0.9)',
+    background: 'rgba(34, 197, 94, 0.3)',
     zIndex: '2147483646',
     pointerEvents: 'none',
-    animation: 'jarvis-ripple 0.4s ease-out forwards',
+    animation: 'jarvis-ripple 0.5s ease-out forwards',
   });
   document.documentElement.appendChild(ripple);
-  setTimeout(() => ripple.remove(), 500);
-  el.click();
-  el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, clientX: smoothX, clientY: smoothY }));
+  setTimeout(() => ripple.remove(), 600);
+  
+  // Focus the element first
+  if (clickable.focus) clickable.focus();
+  
+  // Dispatch comprehensive mouse events for better compatibility
+  const rect = clickable.getBoundingClientRect();
+  const centerX = rect.left + rect.width / 2;
+  const centerY = rect.top + rect.height / 2;
+  
+  const mouseEventInit = {
+    bubbles: true,
+    cancelable: true,
+    view: window,
+    clientX: centerX,
+    clientY: centerY,
+    screenX: centerX + window.screenX,
+    screenY: centerY + window.screenY,
+    button: 0,
+    buttons: 1,
+  };
+  
+  // Full mouse event sequence
+  clickable.dispatchEvent(new MouseEvent('mouseenter', mouseEventInit));
+  clickable.dispatchEvent(new MouseEvent('mouseover', mouseEventInit));
+  clickable.dispatchEvent(new MouseEvent('mousedown', mouseEventInit));
+  clickable.dispatchEvent(new MouseEvent('mouseup', mouseEventInit));
+  clickable.dispatchEvent(new MouseEvent('click', mouseEventInit));
+  
+  // Also try native click as fallback
+  if (clickable.click) clickable.click();
+  
+  // For links, try direct navigation if click didn't work
+  if (clickable.tagName === 'A' && clickable.href) {
+    setTimeout(() => {
+      // Check if we're still on the same page
+      if (window.location.href === document.location.href) {
+        console.log('[JARVIS] Link click may have failed, consider navigation');
+      }
+    }, 100);
+  }
 }
 
 function scrollPage(velocity) {
